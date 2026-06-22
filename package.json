@@ -1,0 +1,23 @@
+{
+  "name": "insightxr-exploded-view",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "A world-tracked mixed-reality exploded-view trainer for understanding and servicing complex products.",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "dev:phone": "vite --host 0.0.0.0 --mode phone",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "test": "node --test",
+    "deploy:vercel": "npx vercel --prod"
+  },
+  "dependencies": {
+    "@ar-js-org/ar.js": "^3.4.8",
+    "three": "^0.184.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-basic-ssl": "^2.3.0",
+    "vite": "^8.0.16"
+  }
+}

@@ -1,0 +1,7 @@
+node_modules/
+dist/
+dev.stdout.log
+dev.stderr.log
+.DS_Store
+*.local
+.vercel/

@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="InsightXR reveals how products work through interactive mixed-reality exploded views."
+    />
+    <title>InsightXR — Exploded View Trainer</title>
+  </head>
+  <body>
+    <div id="app">
+      <header class="topbar">
+        <a class="brand" href="#" aria-label="InsightXR home">
+          <span class="brand-mark" aria-hidden="true">
+            <i></i><i></i><i></i>
+          </span>
+          <span>
+            <strong>INSIGHT<span>XR</span></strong>
+            <small>See what makes it work</small>
+          </span>
+        </a>
+
+        <div class="topbar-actions">
+          <label class="model-picker" for="model-select">
+            <span>MODEL</span>
+            <select id="model-select" aria-label="Choose product model"></select>
+          </label>
+          <div class="mode-switch" role="group" aria-label="View mode">
+            <button class="mode-btn active" id="studio-mode" type="button" aria-pressed="true">
+              <span class="icon">◆</span> Studio
+            </button>
+            <button class="mode-btn" id="camera-mode" type="button" aria-pressed="false">
+              <span class="status-dot"></span> Tracked AR
+            </button>
+          </div>
+          <button class="icon-button" id="fullscreen-button" type="button" title="Toggle fullscreen" aria-label="Toggle fullscreen">
+            <span>⛶</span>
+          </button>
+        </div>
+      </header>
+
+      <main class="workspace">
+        <aside class="panel guide-panel" aria-label="Learning guide">
+          <div class="eyebrow"><span>LIVE MODEL</span><span class="model-code" id="model-code">AC–01</span></div>
+          <h1><span id="model-name">AeroCore</span> <em id="model-variant">S1</em></h1>
+          <p class="subtitle" id="model-subtitle">Adaptive air-quality module</p>
+
+          <div class="model-stats">
+            <div><strong id="component-count">10</strong><span>components</span></div>
+            <div><strong id="system-count">4</strong><span>systems</span></div>
+            <div><strong id="guide-count">6</strong><span>guide steps</span></div>
+          </div>
+
+          <section class="guide-section">
+            <div class="section-heading">
+              <span>GUIDED TOUR</span>
+              <span id="step-count">01 / 06</span>
+            </div>
+            <div class="step-progress" id="step-progress" aria-hidden="true"></div>
+            <div class="guide-copy">
+              <span class="step-kicker" id="step-kicker">SYSTEM OVERVIEW</span>
+              <h2 id="step-title">One product. Every layer.</h2>
+              <p id="step-description">Rotate the model, select a component, or follow the guided teardown.</p>
+            </div>
+            <div class="guide-nav">
+              <button class="round-button" id="previous-step" type="button" aria-label="Previous guide step">←</button>
+              <button class="primary-button" id="play-guide" type="button">
+                <span id="play-icon">▶</span>
+                <span id="play-label">Auto tour</span>
+              </button>
+              <button class="round-button" id="next-step" type="button" aria-label="Next guide step">→</button>
+            </div>
+          </section>
+
+          <button class="challenge-card" id="challenge-button" type="button">
+            <span class="challenge-icon">⚡</span>
+            <span>
+              <strong>Service challenge</strong>
+              <small>Practice a safe maintenance path</small>
+            </span>
+            <span class="challenge-arrow">↗</span>
+          </button>
+        </aside>
+
+        <section class="viewport-shell" aria-label="Interactive 3D model">
+          <div id="viewport"></div>
+          <div id="label-layer" aria-hidden="true"></div>
+          <div class="scan-lines" aria-hidden="true"></div>
+
+          <div class="viewport-toolbar" role="toolbar" aria-label="Model tools">
+            <button class="tool-button active" id="inspect-tool" type="button" data-tooltip="Rotate & inspect" aria-label="Inspect model">
+              <span>↻</span><small>Inspect</small>
+            </button>
+            <button class="tool-button" id="place-tool" type="button" data-tooltip="Move the model" aria-label="Place model">
+              <span>✥</span><small>Place</small>
+            </button>
+            <span class="toolbar-divider"></span>
+            <button class="tool-button" id="xray-tool" type="button" data-tooltip="See through the enclosure" aria-label="Toggle X-ray">
+              <span>◉</span><small>X-ray</small>
+            </button>
+            <button class="tool-button" id="section-tool" type="button" data-tooltip="Slice through the assembly" aria-label="Toggle cross-section">
+              <span>◒</span><small>Section</small>
+            </button>
+            <button class="tool-button" id="labels-tool" type="button" data-tooltip="Toggle part labels" aria-label="Toggle labels">
+              <span>⌖</span><small>Labels</small>
+            </button>
+            <button class="tool-button active" id="annotations-tool" type="button" data-tooltip="Toggle spatial annotations" aria-label="Toggle spatial annotations">
+              <span>ⓘ</span><small>Notes</small>
+            </button>
+            <button class="tool-button" id="reset-tool" type="button" data-tooltip="Reset view" aria-label="Reset view">
+              <span>↺</span><small>Reset</small>
+            </button>
+          </div>
+
+          <div class="interaction-hint" id="interaction-hint">
+            <span class="mouse-icon">◉</span>
+            <span><b>Drag</b> to rotate &nbsp;·&nbsp; <b>Scroll</b> to zoom &nbsp;·&nbsp; <b>Click</b> a part to inspect</span>
+            <button type="button" aria-label="Dismiss hint">×</button>
+          </div>
+
+          <div class="mr-reticle" id="mr-reticle" aria-hidden="true">
+            <i></i><i></i><i></i><i></i>
+          </div>
+
+          <div class="challenge-overlay" id="challenge-overlay" aria-live="polite">
+            <div class="challenge-status">
+              <span class="challenge-badge">SERVICE MODE</span>
+              <strong id="challenge-prompt">Remove the top grille</strong>
+              <small id="challenge-progress">Step 1 of 5 · Select the correct component</small>
+            </div>
+            <button id="exit-challenge" type="button">Exit challenge</button>
+          </div>
+
+          <div class="section-control" id="section-control" aria-label="Cross-section controls">
+            <span class="section-control-title">Cross-section</span>
+            <div class="section-axis-buttons" id="section-axis-buttons" role="group" aria-label="Cross-section direction">
+              <button class="active" type="button" data-section-axis="x">Side</button>
+              <button type="button" data-section-axis="y">Height</button>
+              <button type="button" data-section-axis="z">Depth</button>
+            </div>
+            <input id="section-slider" type="range" min="0" max="100" value="50" aria-label="Cross-section position" />
+            <output id="section-output" for="section-slider">50%</output>
+            <button class="section-close" id="section-close" type="button" aria-label="Close cross-section">×</button>
+          </div>
+
+          <div class="explosion-control">
+            <div class="explosion-header">
+              <label for="explosion-slider">
+                <span class="explode-icon">↔</span>
+                EXPLODED VIEW
+              </label>
+              <output id="explosion-output" for="explosion-slider">0%</output>
+            </div>
+            <div class="slider-row">
+              <span>ASSEMBLED</span>
+              <input id="explosion-slider" type="range" min="0" max="100" value="0" aria-label="Explosion amount" />
+              <span>SEPARATED</span>
+            </div>
+          </div>
+        </section>
+
+        <aside class="panel parts-panel" aria-label="Component explorer">
+          <div class="parts-heading">
+            <div>
+              <span class="eyebrow-text">COMPONENT EXPLORER</span>
+              <h2>Inside the system</h2>
+            </div>
+            <span class="visible-count" id="visible-count">10 / 10</span>
+          </div>
+
+          <label class="search-box">
+            <span>⌕</span>
+            <input id="component-search" type="search" placeholder="Find a component…" autocomplete="off" aria-label="Search components" />
+          </label>
+
+          <div class="category-tabs" id="category-tabs" role="tablist" aria-label="Component categories">
+            <button class="active" type="button" data-category="All" role="tab" aria-selected="true">All</button>
+            <button type="button" data-category="Airflow" role="tab" aria-selected="false">Airflow</button>
+            <button type="button" data-category="Electronics" role="tab" aria-selected="false">Electronics</button>
+            <button type="button" data-category="Structure" role="tab" aria-selected="false">Structure</button>
+            <button type="button" data-category="Power" role="tab" aria-selected="false">Power</button>
+          </div>
+
+          <div class="component-list" id="component-list"></div>
+
+          <article class="part-detail" id="part-detail" aria-live="polite">
+            <div class="detail-placeholder">
+              <span>◎</span>
+              <strong>Select a component</strong>
+              <p>Its function, material, and service notes will appear here.</p>
+            </div>
+          </article>
+        </aside>
+      </main>
+    </div>
+
+    <div class="toast-region" id="toast-region" aria-live="polite"></div>
+
+    <div class="ar-mode-dialog" id="ar-mode-dialog" role="dialog" aria-modal="true" aria-labelledby="ar-mode-title">
+      <div class="ar-mode-card">
+        <button class="dialog-close" id="close-ar-dialog" type="button" aria-label="Close AR options">×</button>
+        <span class="dialog-kicker">CHOOSE AN AR MODE</span>
+        <h2 id="ar-mode-title">Place and inspect in your space</h2>
+        <p>Surface AR uses the phone's room tracking and is the mode for walking around the model. Marker preview follows a visible Hiro marker and cannot remember the room.</p>
+
+        <div class="ar-mode-options">
+          <button class="ar-option recommended" id="surface-ar-button" type="button">
+            <span class="option-icon">⌖</span>
+            <span class="option-copy">
+              <strong>Place on a surface</strong>
+              <small>World tracking · scan a table or floor, tap to anchor, then walk around it</small>
+              <em id="surface-support">Checking this device…</em>
+            </span>
+            <span class="option-tag">BEST</span>
+          </button>
+
+          <button class="ar-option" id="marker-ar-button" type="button">
+            <span class="option-icon marker-symbol">▣</span>
+            <span class="option-copy">
+              <strong>Marker preview</strong>
+              <small>Image tracking only · the full marker must remain visible</small>
+              <em>No room map or persistence when the marker leaves view</em>
+            </span>
+            <span class="option-tag">LIMITED</span>
+          </button>
+        </div>
+
+        <div class="marker-help">
+          <img src="/tracking/hiro.png" alt="Hiro augmented-reality tracking marker" />
+          <div>
+            <strong>Marker mode needs this image</strong>
+            <p>Open it on another screen or print it flat, ideally 12–20 cm wide.</p>
+            <a href="/hiro-marker.html" target="_blank" rel="noreferrer">Open clean fullscreen marker ↗</a>
+          </div>
+        </div>
+
+        <small class="secure-note">Camera and WebXR require HTTPS on a phone. No camera frames are uploaded.</small>
+      </div>
+    </div>
+
+    <div class="tracked-ar-overlay" id="tracked-ar-overlay">
+      <div class="ar-top-controls">
+        <div class="ar-tracking-status">
+          <span class="tracking-pulse"></span>
+          <span>
+            <strong id="ar-status-title">Scanning the room…</strong>
+            <small id="ar-status-detail">Move your phone slowly to find a surface.</small>
+          </span>
+        </div>
+        <button id="exit-ar-button" type="button">Exit AR</button>
+      </div>
+
+      <div class="ar-placement-guide" id="ar-placement-guide">
+        <span class="placement-ring"></span>
+        <strong id="placement-guide-title">Find a horizontal surface</strong>
+        <small id="placement-guide-detail">Point at a table or floor and move slowly.</small>
+        <div class="marker-diagnostics" id="marker-diagnostics">
+          <span id="camera-check">Camera · waiting</span>
+          <span id="tracker-check">Tracker · waiting</span>
+          <span id="marker-check">Marker · not found</span>
+        </div>
+      </div>
+
+      <div class="ar-control-dock">
+        <div class="ar-studio-controls" id="ar-studio-controls">
+          <div class="ar-transform-controls">
+            <span class="ar-control-label">Transform</span>
+            <button id="ar-rotate-left" type="button" aria-label="Rotate model left">&olarr;</button>
+            <label class="ar-scale-control" for="ar-scale-slider">
+              <span>Size</span>
+              <input id="ar-scale-slider" type="range" min="55" max="200" value="100" aria-label="AR model size" />
+              <output id="ar-scale-output" for="ar-scale-slider">100%</output>
+            </label>
+            <button id="ar-rotate-right" type="button" aria-label="Rotate model right">&orarr;</button>
+            <button id="ar-reset-transform" type="button" aria-label="Reset model transform">&circlearrowleft;</button>
+          </div>
+
+          <div class="ar-position-controls" id="ar-position-controls">
+            <span class="ar-control-label">Position</span>
+            <div class="ar-position-grid">
+              <button id="ar-move-left" type="button" aria-label="Move model left">&larr;</button>
+              <button id="ar-move-forward" type="button" aria-label="Move model forward">&uarr;</button>
+              <button id="ar-move-back" type="button" aria-label="Move model backward">&darr;</button>
+              <button id="ar-move-right" type="button" aria-label="Move model right">&rarr;</button>
+              <button id="ar-move-down" type="button" aria-label="Lower model">−Y</button>
+              <button id="ar-move-up" type="button" aria-label="Raise model">+Y</button>
+            </div>
+          </div>
+
+          <div class="ar-component-control">
+            <span class="ar-control-label">Model inspector</span>
+            <div class="ar-inspector-selects">
+              <select id="ar-model-select" aria-label="Choose AR model"></select>
+              <select id="ar-component-select" aria-label="Inspect component">
+                <option value="">Whole assembly</option>
+              </select>
+            </div>
+            <div class="ar-inspector-actions">
+              <button id="ar-isolate-button" type="button">Isolate</button>
+              <button id="ar-show-all-button" type="button">Show all</button>
+              <button id="ar-guide-previous" type="button" aria-label="Previous assembly stage">‹ Stage</button>
+              <button id="ar-guide-next" type="button" aria-label="Next assembly stage">Stage ›</button>
+              <button id="ar-spin-button" type="button">Auto spin</button>
+              <button id="ar-annotations-button" class="active" type="button">Notes on</button>
+            </div>
+            <small id="ar-guide-info">Stage 1 of 6 · System overview</small>
+            <small id="ar-component-info">Select a part to highlight it and read its role.</small>
+          </div>
+        </div>
+
+        <div class="ar-section-panel" id="ar-section-panel" aria-label="AR cross-section controls">
+          <span class="ar-control-label">Cross-section</span>
+          <div class="section-axis-buttons" id="ar-section-axis-buttons" role="group" aria-label="AR cross-section direction">
+            <button class="active" type="button" data-section-axis="x">Side</button>
+            <button type="button" data-section-axis="y">Height</button>
+            <button type="button" data-section-axis="z">Depth</button>
+          </div>
+          <input id="ar-section-slider" type="range" min="0" max="100" value="50" aria-label="AR cross-section position" />
+          <output id="ar-section-output" for="ar-section-slider">50%</output>
+        </div>
+
+        <div class="ar-bottom-controls">
+          <div class="ar-explosion-control">
+            <label for="ar-explosion-slider">Explode</label>
+            <input id="ar-explosion-slider" type="range" min="0" max="100" value="0" aria-label="AR explosion amount" />
+            <output id="ar-explosion-output" for="ar-explosion-slider">0%</output>
+          </div>
+          <button id="ar-xray-button" type="button"><span>◉</span>X-ray</button>
+          <button id="ar-section-button" type="button"><span>◒</span>Section</button>
+          <button id="replace-anchor-button" type="button"><span>⌖</span><b id="replace-anchor-label">Re-place</b></button>
+        </div>
+      </div>
+    </div>
+
+    <div class="spatial-annotation-layer" id="spatial-annotation-layer" aria-live="polite">
+      <svg class="annotation-leader" aria-hidden="true">
+        <path id="annotation-line"></path>
+        <circle id="annotation-target" r="4"></circle>
+      </svg>
+      <article class="spatial-annotation" id="spatial-annotation">
+        <div class="annotation-heading">
+          <span class="annotation-index" id="annotation-index">01</span>
+          <span class="annotation-category" id="annotation-category">Structure</span>
+          <span class="annotation-risk" id="annotation-risk">Low</span>
+        </div>
+        <h3 id="annotation-title">Component</h3>
+        <p id="annotation-role">Component function.</p>
+        <div class="annotation-facts">
+          <span><b>KEY METRIC</b><em id="annotation-metric">—</em></span>
+          <span><b>SERVICE NOTE</b><em id="annotation-service">—</em></span>
+        </div>
+      </article>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
