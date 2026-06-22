@@ -22,6 +22,7 @@ All included learning models are generated entirely in code, so there are no pro
 - Switch models without discarding the current world anchor
 - Isolate a selected component, restore all parts, step through assembly stages, and auto-spin
 - Spatial component annotations with live leader lines, safety badges, key metrics, and service notes
+- Validated Assembly Mode with ghost targets, snap animations, hints, timing, mistakes, and scoring
 - Safe-maintenance challenge
 
 ## Run on a computer
@@ -120,6 +121,7 @@ For marker recognition:
 | Explode assembly | Bottom AR slider |
 | See through enclosure | **X-ray** |
 | Slice through the assembly | **Section**, then choose Side/Height/Depth and move the slider |
+| Rebuild the product | **Assembly** in Model inspector; tap parts in the validated order |
 | Leave tracked mode | **Exit AR** |
 
 ## Studio controls
@@ -134,7 +136,21 @@ For marker recognition:
 | Guided teardown | Arrow buttons or Auto tour |
 | X-ray enclosure | X-ray tool or `X` |
 | Cross-section | Section tool or `C`; select an axis and move the cut plane |
+| Assembly Mode | Assemble tool or `A`; tap components from the inside out |
 | Reset | Reset tool or `R` |
+
+## Assembly Mode
+
+Assembly Mode turns the exploded model into a rebuild exercise:
+
+1. Start **Assemble** in Studio or **Assembly** in the AR inspector.
+2. The product separates and a cyan ghost shows the next installation target.
+3. Tap a component in the 3D view, component explorer, or AR inspector.
+4. Correct components snap into place. Incorrect order attempts reduce the score.
+5. **Show hint** highlights the required separated component at a score cost.
+6. Complete all components to receive a final time and score.
+
+The installation sequence is generated from each model's service order, rebuilding internal modules before outer protection and access parts.
 
 ## Free Vercel hosting
 
@@ -174,6 +190,7 @@ pnpm preview
 - `src/explosion.js` — staged explosion calculations
 - `src/annotations.js` — annotation content, risk tone, and screen-placement calculations
 - `src/cross-section.js` — cross-section axis, position, and display calculations
+- `src/assembly.js` — validated installation sequence, progress, timing, and score calculations
 - `src/style.css` — desktop, mobile, and AR overlay interface
 - `tests/` — unit tests for core explosion behavior
 

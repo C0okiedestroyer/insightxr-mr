@@ -1067,6 +1067,135 @@ input[type="range"]::-webkit-slider-thumb {
   font-size: 9px;
 }
 
+.assembly-overlay {
+  position: absolute;
+  top: 74px;
+  left: 50%;
+  z-index: 15;
+  display: grid;
+  grid-template-columns: minmax(230px, 1fr) auto auto;
+  align-items: center;
+  gap: 15px;
+  width: min(620px, calc(100% - 28px));
+  padding: 12px 13px 12px 16px;
+  border: 1px solid rgba(93, 227, 233, 0.38);
+  border-radius: 13px;
+  background: rgba(12, 43, 53, 0.94);
+  color: white;
+  opacity: 0;
+  transform: translate(-50%, -12px);
+  transition: opacity 0.25s, transform 0.25s;
+  pointer-events: none;
+  backdrop-filter: blur(17px);
+}
+
+.assembly-overlay.visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+  pointer-events: auto;
+}
+
+.assembly-main strong,
+.assembly-main small,
+.ar-assembly-panel strong,
+.ar-assembly-panel small {
+  display: block;
+}
+
+.assembly-badge {
+  display: inline-block;
+  margin-bottom: 5px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  background: var(--aqua);
+  color: white;
+  font-size: 7px;
+  font-weight: 850;
+  letter-spacing: 0.13em;
+}
+
+.assembly-main strong,
+.ar-assembly-panel strong {
+  font-size: 11px;
+}
+
+.assembly-main > small,
+.ar-assembly-panel > div > small {
+  margin-top: 3px;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 7px;
+}
+
+.assembly-progress-track {
+  height: 3px;
+  margin-top: 8px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.13);
+}
+
+.assembly-progress-track i {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--aqua), #72f3c0);
+  transition: width 0.45s ease;
+}
+
+.assembly-metrics {
+  display: flex;
+  gap: 6px;
+}
+
+.assembly-metrics span {
+  min-width: 50px;
+  padding: 6px 7px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.08);
+  text-align: center;
+}
+
+.assembly-metrics b,
+.assembly-metrics small {
+  display: block;
+}
+
+.assembly-metrics b {
+  color: var(--aqua-bright);
+  font-size: 9px;
+}
+
+.assembly-metrics small {
+  margin-top: 2px;
+  color: rgba(255, 255, 255, 0.48);
+  font-size: 6px;
+  text-transform: uppercase;
+}
+
+.assembly-actions {
+  display: flex;
+  gap: 5px;
+}
+
+.assembly-actions button {
+  min-height: 29px;
+  padding: 6px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.08);
+  color: white;
+  cursor: pointer;
+  font-size: 7px;
+  font-weight: 750;
+}
+
+body.assembly-active .explosion-control,
+body.assembly-active .section-control {
+  opacity: 0.3;
+  pointer-events: none;
+}
+
 .parts-panel {
   display: flex;
   flex-direction: column;
@@ -1762,6 +1891,23 @@ body[data-ar-status="marker-found"] .tracking-pulse {
   pointer-events: none;
 }
 
+.ar-assembly-panel {
+  display: none;
+  grid-template-columns: minmax(190px, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 1px solid rgba(93, 227, 233, 0.42);
+  border-radius: 12px;
+  background: rgba(8, 32, 41, 0.9);
+  pointer-events: auto;
+  backdrop-filter: blur(15px);
+}
+
+.ar-assembly-panel.visible {
+  display: grid;
+}
+
 .ar-studio-controls {
   display: grid;
   grid-template-columns: minmax(310px, 1.35fr) minmax(220px, 0.8fr) minmax(245px, 1fr);
@@ -1885,7 +2031,7 @@ body.marker-ar-active .ar-component-control {
 .ar-inspector-actions {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: repeat(6, minmax(44px, 1fr));
+  grid-template-columns: repeat(7, minmax(42px, 1fr));
   gap: 4px;
 }
 
@@ -2069,6 +2215,7 @@ body.tracked-ar-active .guide-panel,
 body.tracked-ar-active .parts-panel,
 body.tracked-ar-active .viewport-toolbar,
 body.tracked-ar-active .interaction-hint,
+body.tracked-ar-active .assembly-overlay,
 body.tracked-ar-active .section-control,
 body.tracked-ar-active .explosion-control,
 body.tracked-ar-active .challenge-overlay,
@@ -2240,6 +2387,15 @@ body.marker-ar-active #viewport canvas {
     min-width: calc(100% - 24px);
   }
 
+  .assembly-overlay {
+    top: 64px;
+    grid-template-columns: 1fr auto;
+  }
+
+  .assembly-overlay .assembly-main {
+    grid-column: 1 / -1;
+  }
+
   .explosion-control {
     right: 12px;
     bottom: 12px;
@@ -2304,6 +2460,18 @@ body.marker-ar-active #viewport canvas {
 
   .ar-section-panel {
     grid-template-columns: auto minmax(88px, 1fr) 34px;
+  }
+
+  .ar-assembly-panel {
+    grid-template-columns: 1fr auto;
+  }
+
+  .ar-assembly-panel > div:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .ar-assembly-panel .assembly-metrics span {
+    min-width: 42px;
   }
 
   .ar-section-panel > .ar-control-label {

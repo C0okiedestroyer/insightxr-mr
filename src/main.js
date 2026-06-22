@@ -12,6 +12,13 @@ import {
   sectionCoordinate,
   sectionDisplayPercent,
 } from "./cross-section.js";
+import {
+  assemblyProgress,
+  assemblyScore,
+  buildAssemblySequence,
+  currentAssemblyPart,
+  formatAssemblyTime,
+} from "./assembly.js";
 
 const dom = {
   viewport: document.querySelector("#viewport"),
@@ -45,6 +52,7 @@ const dom = {
   sectionClose: document.querySelector("#section-close"),
   labelsTool: document.querySelector("#labels-tool"),
   annotationsTool: document.querySelector("#annotations-tool"),
+  assemblyTool: document.querySelector("#assembly-tool"),
   resetTool: document.querySelector("#reset-tool"),
   previousStep: document.querySelector("#previous-step"),
   nextStep: document.querySelector("#next-step"),
@@ -63,6 +71,15 @@ const dom = {
   challengePrompt: document.querySelector("#challenge-prompt"),
   challengeProgress: document.querySelector("#challenge-progress"),
   exitChallenge: document.querySelector("#exit-challenge"),
+  assemblyOverlay: document.querySelector("#assembly-overlay"),
+  assemblyPrompt: document.querySelector("#assembly-prompt"),
+  assemblyDetail: document.querySelector("#assembly-detail"),
+  assemblyProgressBar: document.querySelector("#assembly-progress-bar"),
+  assemblyStep: document.querySelector("#assembly-step"),
+  assemblyTime: document.querySelector("#assembly-time"),
+  assemblyScore: document.querySelector("#assembly-score"),
+  assemblyHint: document.querySelector("#assembly-hint"),
+  exitAssembly: document.querySelector("#exit-assembly"),
   toastRegion: document.querySelector("#toast-region"),
   arDialog: document.querySelector("#ar-mode-dialog"),
   closeArDialog: document.querySelector("#close-ar-dialog"),
@@ -112,6 +129,16 @@ const dom = {
   arGuideInfo: document.querySelector("#ar-guide-info"),
   arSpinButton: document.querySelector("#ar-spin-button"),
   arAnnotationsButton: document.querySelector("#ar-annotations-button"),
+  arAssemblyButton: document.querySelector("#ar-assembly-button"),
+  arAssemblyPanel: document.querySelector("#ar-assembly-panel"),
+  arAssemblyPrompt: document.querySelector("#ar-assembly-prompt"),
+  arAssemblyDetail: document.querySelector("#ar-assembly-detail"),
+  arAssemblyProgressBar: document.querySelector("#ar-assembly-progress-bar"),
+  arAssemblyStep: document.querySelector("#ar-assembly-step"),
+  arAssemblyTime: document.querySelector("#ar-assembly-time"),
+  arAssemblyScore: document.querySelector("#ar-assembly-score"),
+  arAssemblyHint: document.querySelector("#ar-assembly-hint"),
+  arExitAssembly: document.querySelector("#ar-exit-assembly"),
   annotationLayer: document.querySelector("#spatial-annotation-layer"),
   annotationCard: document.querySelector("#spatial-annotation"),
   annotationLine: document.querySelector("#annotation-line"),
@@ -148,6 +175,7 @@ const state = {
   sectionEnabled: false,
   sectionAxis: "x",
   sectionProgress: 0.5,
+  assembly: null,
 };
 
 const scene = new THREE.Scene();
@@ -268,6 +296,8 @@ const sectionHelperOutline = new THREE.LineSegments(
 sectionHelperSurface.renderOrder = 30;
 sectionHelperOutline.renderOrder = 31;
 sectionHelper.add(sectionHelperSurface, sectionHelperOutline);
+let assemblyGhost = null;
+let lastAssemblyHudUpdate = 0;
 let pointerDown = null;
 let draggingPlacement = false;
 
@@ -283,6 +313,269 @@ function activeServiceSequence() {
   return activeDefinition.serviceSequence;
 }
 
+function objectHasFlag(object, flag) {
+  let current = object;
+  while (current && current !== assembly.parent) {
+    if (current.userData?.[flag]) return true;
+    current = current.parent;
+  }
+  return false;
+}
+
+function activeAssemblySequence() {
+  return buildAssemblySequence(activeComponents());
+}
+
+function removeAssemblyGhost() {
+  if (!assemblyGhost) return;
+  assemblyGhost.removeFromParent();
+  assemblyGhost.traverse((child) => {
+    if (child.material) {
+      materialList(child.material).forEach((material) => material.dispose());
+    }
+  });
+  assemblyGhost = null;
+}
+
+function createAssemblyGhost(partId) {
+  removeAssemblyGhost();
+  const source = parts.get(partId);
+  if (!source) return;
+  assemblyGhost = source.clone(true);
+  assemblyGhost.name = `Assembly target · ${partId}`;
+  assemblyGhost.userData.isAssemblyGhost = true;
+  assemblyGhost.position.copy(source.userData.basePosition);
+  assemblyGhost.quaternion.copy(source.userData.baseQuaternion);
+  assemblyGhost.scale.copy(source.scale);
+  assemblyGhost.traverse((child) => {
+    child.userData = {
+      ...child.userData,
+      partId: null,
+      isAssemblyGhost: true,
+    };
+    child.castShadow = false;
+    child.receiveShadow = false;
+    if (child.isMesh) {
+      child.material = new THREE.MeshBasicMaterial({
+        color: 0x5de3e9,
+        transparent: true,
+        opacity: 0.16,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      });
+    } else if (child.isLine || child.isLineSegments) {
+      child.material = new THREE.LineBasicMaterial({
+        color: 0x82f6ef,
+        transparent: true,
+        opacity: 0.62,
+        depthWrite: false,
+      });
+    }
+  });
+  assembly.add(assemblyGhost);
+}
+
+function assemblyElapsed(now = performance.now()) {
+  if (!state.assembly) return 0;
+  return (state.assembly.completedAt ?? now) - state.assembly.startedAt;
+}
+
+function syncAssemblyUI(now = performance.now()) {
+  const session = state.assembly;
+  const active = Boolean(session);
+  document.body.classList.toggle("assembly-active", active);
+  dom.assemblyOverlay.classList.toggle("visible", active && !state.arMode);
+  dom.arAssemblyPanel.classList.toggle("visible", active && Boolean(state.arMode));
+  dom.assemblyTool.classList.toggle("active", active);
+  dom.arAssemblyButton.classList.toggle("active", active);
+  dom.assemblyTool.setAttribute("aria-label", active ? "Exit assembly mode" : "Start assembly mode");
+  dom.arAssemblyButton.textContent = active ? "Exit assembly" : "Assembly";
+  dom.slider.disabled = active;
+  dom.arSlider.disabled = active;
+  if (!session) return;
+
+  const total = session.sequence.length;
+  const progress = assemblyProgress(session.index, total);
+  const expectedId = currentAssemblyPart(session.sequence, session.index);
+  const component = activeComponents().find((item) => item.id === expectedId);
+  const complete = session.completed;
+  const prompt = complete
+    ? "Assembly complete"
+    : `Install ${component?.name ?? "the next component"}`;
+  const detail = complete
+    ? `${total} components installed in the validated service order.`
+    : "Tap the matching separated part to snap it into the cyan ghost position.";
+  const elapsed = assemblyElapsed(now);
+  const score = assemblyScore({
+    total,
+    mistakes: session.mistakes,
+    hints: session.hints,
+    elapsedMs: elapsed,
+  });
+
+  [dom.assemblyPrompt, dom.arAssemblyPrompt].forEach((element) => {
+    element.textContent = prompt;
+  });
+  [dom.assemblyDetail, dom.arAssemblyDetail].forEach((element) => {
+    element.textContent = detail;
+  });
+  [dom.assemblyProgressBar, dom.arAssemblyProgressBar].forEach((element) => {
+    element.style.width = `${Math.round(progress * 100)}%`;
+  });
+  [dom.assemblyStep, dom.arAssemblyStep].forEach((element) => {
+    element.textContent = `${session.index} / ${total}`;
+  });
+  [dom.assemblyTime, dom.arAssemblyTime].forEach((element) => {
+    element.textContent = formatAssemblyTime(elapsed);
+  });
+  [dom.assemblyScore, dom.arAssemblyScore].forEach((element) => {
+    element.textContent = String(score);
+  });
+  [dom.assemblyHint, dom.arAssemblyHint].forEach((button) => {
+    button.disabled = complete;
+    button.textContent = complete ? "Completed" : "Show hint";
+  });
+}
+
+function refreshAssemblyTarget() {
+  if (!state.assembly || state.assembly.completed) {
+    removeAssemblyGhost();
+    return;
+  }
+  createAssemblyGhost(currentAssemblyPart(state.assembly.sequence, state.assembly.index));
+}
+
+function startAssemblyMode({ announce = true } = {}) {
+  if (state.assembly) return;
+  setGuidePlaying(false);
+  if (state.challenge) exitChallenge();
+  state.removedParts.clear();
+  state.isolateSelected = false;
+  state.arSpin = false;
+  state.xray = false;
+  dom.xrayTool.classList.remove("active");
+  dom.arXrayButton.classList.remove("active");
+  if (state.sectionEnabled) setSectionEnabled(false);
+  state.selectedPartId = null;
+  state.assembly = {
+    sequence: activeAssemblySequence(),
+    index: 0,
+    mistakes: 0,
+    hints: 0,
+    placed: new Set(),
+    startedAt: performance.now(),
+    completedAt: null,
+    completed: false,
+    snap: null,
+  };
+  setInteractionMode("inspect");
+  setExplosionTarget(1, true);
+  refreshAssemblyTarget();
+  setMaterialState();
+  syncAssemblyUI();
+  if (announce) {
+    showToast("Assembly mode started — rebuild from the inside out.", "success");
+  }
+}
+
+function exitAssemblyMode({ restore = true, announce = false } = {}) {
+  if (!state.assembly) return;
+  removeAssemblyGhost();
+  state.assembly = null;
+  state.selectedPartId = null;
+  if (restore) setExplosionTarget(0, true);
+  setMaterialState();
+  syncAssemblyUI();
+  if (announce) showToast("Assembly mode closed.");
+}
+
+function handleAssemblySelection(partId) {
+  const session = state.assembly;
+  if (!session || session.completed || !partId) return;
+  if (session.snap) {
+    showToast("Let the current component finish snapping into place.");
+    return;
+  }
+  const expectedId = currentAssemblyPart(session.sequence, session.index);
+  if (partId !== expectedId) {
+    session.mistakes += 1;
+    const expected = activeComponents().find((item) => item.id === expectedId);
+    showToast(`${expected?.name ?? "Another component"} must be installed first.`, "error");
+    renderer.domElement.classList.remove("shake");
+    requestAnimationFrame(() => renderer.domElement.classList.add("shake"));
+    syncAssemblyUI();
+    return;
+  }
+
+  const part = parts.get(partId);
+  session.placed.add(partId);
+  session.snap = {
+    partId,
+    startedAt: performance.now(),
+    duration: 520,
+    fromPosition: part.position.clone(),
+    fromQuaternion: part.quaternion.clone(),
+  };
+  session.index += 1;
+  state.selectedPartId = null;
+  setMaterialState();
+
+  if (session.index >= session.sequence.length) {
+    session.completed = true;
+    session.completedAt = performance.now();
+    removeAssemblyGhost();
+    showToast("Assembly complete — every component passed order validation.", "success");
+  } else {
+    refreshAssemblyTarget();
+    showToast("Component snapped into place.", "success");
+  }
+  syncAssemblyUI();
+}
+
+function showAssemblyHint() {
+  const session = state.assembly;
+  if (!session || session.completed) return;
+  const expectedId = currentAssemblyPart(session.sequence, session.index);
+  session.hints += 1;
+  state.selectedPartId = expectedId;
+  setMaterialState();
+  syncAssemblyUI();
+  const expected = activeComponents().find((item) => item.id === expectedId);
+  showToast(`Hint: look for ${expected?.name ?? "the highlighted component"}.`);
+  window.setTimeout(() => {
+    if (state.assembly === session && state.selectedPartId === expectedId) {
+      state.selectedPartId = null;
+      setMaterialState();
+    }
+  }, 1800);
+}
+
+function updateAssemblyAnimation(frameTime) {
+  const session = state.assembly;
+  if (!session) return;
+  if (assemblyGhost) {
+    const pulse = 1 + Math.sin(frameTime * 0.006) * 0.018;
+    assemblyGhost.scale.setScalar(pulse);
+  }
+  if (session.snap) {
+    const snap = session.snap;
+    const part = parts.get(snap.partId);
+    const progress = Math.min(1, (frameTime - snap.startedAt) / snap.duration);
+    const eased = 1 - (1 - progress) ** 3;
+    part.position.lerpVectors(snap.fromPosition, part.userData.basePosition, eased);
+    part.quaternion.copy(snap.fromQuaternion).slerp(part.userData.baseQuaternion, eased);
+    if (progress >= 1) {
+      part.position.copy(part.userData.basePosition);
+      part.quaternion.copy(part.userData.baseQuaternion);
+      session.snap = null;
+    }
+  }
+  if (frameTime - lastAssemblyHudUpdate > 250) {
+    lastAssemblyHudUpdate = frameTime;
+    syncAssemblyUI(frameTime);
+  }
+}
+
 function materialList(material) {
   return Array.isArray(material) ? material : [material];
 }
@@ -294,8 +587,8 @@ function computeSectionBounds() {
 
   assembly.traverse((child) => {
     if (
-      child.userData.isSectionHelper
-      || child.parent?.userData.isSectionHelper
+      objectHasFlag(child, "isSectionHelper")
+      || objectHasFlag(child, "isAssemblyGhost")
       || !child.geometry
     ) return;
     if (!child.geometry.boundingBox) child.geometry.computeBoundingBox();
@@ -327,8 +620,8 @@ function computeSectionBounds() {
 function applySectionMaterials() {
   assembly.traverse((child) => {
     if (
-      child.userData.isSectionHelper
-      || child.parent?.userData.isSectionHelper
+      objectHasFlag(child, "isSectionHelper")
+      || objectHasFlag(child, "isAssemblyGhost")
       || !child.material
     ) return;
     materialList(child.material).forEach((material) => {
@@ -388,6 +681,10 @@ function syncSectionUI() {
 }
 
 function setSectionEnabled(enabled) {
+  if (enabled && state.assembly) {
+    showToast("Finish or exit Assembly Mode before using cross-section.", "error");
+    return;
+  }
   state.sectionEnabled = Boolean(enabled);
   if (state.sectionEnabled) {
     if (sectionHelper.parent !== assembly) assembly.add(sectionHelper);
@@ -679,6 +976,10 @@ function setAnnotationsEnabled(enabled) {
 }
 
 function selectPart(partId, fromUI = false) {
+  if (state.assembly && partId) {
+    handleAssemblySelection(partId);
+    return;
+  }
   if (state.challenge && partId) {
     handleChallengeSelection(partId);
     return;
@@ -726,10 +1027,14 @@ function updateFilter() {
 
 function applyExplosion(progress) {
   state.explosion = progress;
-  assembly.scale.setScalar(1 - progress * 0.16);
+  assembly.scale.setScalar(state.assembly ? 1 : 1 - progress * 0.16);
   parts.forEach((part) => {
     const definition = part.userData.definition;
-    const amount = componentExplosion(progress, definition.order);
+    const amount = state.assembly
+      ? state.assembly.placed.has(definition.id)
+        ? 0
+        : componentExplosion(1, definition.order)
+      : componentExplosion(progress, definition.order);
     const offset = part.userData.explodeVector.clone().multiplyScalar(amount);
     part.position.copy(part.userData.basePosition).add(offset);
     const tilt = amount * (definition.order % 2 === 0 ? 0.05 : -0.05);
@@ -751,6 +1056,7 @@ function setExplosionTarget(value, immediate = false) {
 }
 
 function setGuideStep(index) {
+  if (state.assembly) exitAssemblyMode({ restore: true });
   const guideSteps = activeGuideSteps();
   const bounded = (index + guideSteps.length) % guideSteps.length;
   state.guideStep = bounded;
@@ -814,6 +1120,8 @@ function resetStudioCamera() {
 function switchModel(modelId, announce = true) {
   const nextDefinition = MODEL_LIBRARY[modelId];
   if (!nextDefinition) return;
+  const restartAssembly = Boolean(state.assembly);
+  if (restartAssembly) exitAssemblyMode({ restore: false });
 
   setGuidePlaying(false);
   state.challenge = null;
@@ -860,6 +1168,7 @@ function switchModel(modelId, announce = true) {
   setExplosionTarget(0, true);
   setGuideStep(0);
   setMaterialState();
+  if (restartAssembly) startAssemblyMode({ announce: false });
   if (!state.arMode) resetStudioCamera();
 
   if (announce) {
@@ -914,6 +1223,7 @@ function prepareTrackedAR(mode) {
   scene.fog = null;
   ground.visible = false;
   grid.visible = false;
+  syncAssemblyUI();
 }
 
 async function startTrackedAR(mode) {
@@ -998,6 +1308,7 @@ function restoreStudioAfterAR() {
   controls.enabled = true;
   controls.target.set(0, 0, 0);
   controls.update();
+  syncAssemblyUI();
   resize();
 }
 
@@ -1053,6 +1364,7 @@ function toggleARSpin() {
 }
 
 function resetExperience() {
+  if (state.assembly) exitAssemblyMode({ restore: false });
   setGuidePlaying(false);
   state.removedParts.clear();
   state.challenge = null;
@@ -1076,6 +1388,7 @@ function resetExperience() {
 }
 
 function startChallenge() {
+  if (state.assembly) exitAssemblyMode({ restore: true });
   setGuidePlaying(false);
   state.removedParts.clear();
   state.isolateSelected = false;
@@ -1269,6 +1582,12 @@ dom.arGuidePrevious.addEventListener("click", () => setGuideStep(state.guideStep
 dom.arGuideNext.addEventListener("click", () => setGuideStep(state.guideStep + 1));
 dom.arSpinButton.addEventListener("click", toggleARSpin);
 dom.arAnnotationsButton.addEventListener("click", () => setAnnotationsEnabled(!state.annotations));
+dom.arAssemblyButton.addEventListener("click", () => {
+  if (state.assembly) exitAssemblyMode({ restore: true, announce: true });
+  else startAssemblyMode();
+});
+dom.arAssemblyHint.addEventListener("click", showAssemblyHint);
+dom.arExitAssembly.addEventListener("click", () => exitAssemblyMode({ restore: true, announce: true }));
 dom.arOverlay.addEventListener("beforexrselect", (event) => {
   if (event.target.closest("button, input, select, label")) event.preventDefault();
 });
@@ -1299,6 +1618,12 @@ dom.labelsTool.addEventListener("click", () => {
   dom.labelsTool.classList.toggle("active", state.labels);
 });
 dom.annotationsTool.addEventListener("click", () => setAnnotationsEnabled(!state.annotations));
+dom.assemblyTool.addEventListener("click", () => {
+  if (state.assembly) exitAssemblyMode({ restore: true, announce: true });
+  else startAssemblyMode();
+});
+dom.assemblyHint.addEventListener("click", showAssemblyHint);
+dom.exitAssembly.addEventListener("click", () => exitAssemblyMode({ restore: true, announce: true }));
 dom.resetTool.addEventListener("click", resetExperience);
 dom.challengeButton.addEventListener("click", startChallenge);
 dom.exitChallenge.addEventListener("click", exitChallenge);
@@ -1339,17 +1664,22 @@ window.addEventListener("keydown", (event) => {
     closeAROptions();
     return;
   }
-  if (event.key === "ArrowRight") setGuideStep(state.guideStep + 1);
-  if (event.key === "ArrowLeft") setGuideStep(state.guideStep - 1);
+  if (event.key === "ArrowRight" && !state.assembly) setGuideStep(state.guideStep + 1);
+  if (event.key === "ArrowLeft" && !state.assembly) setGuideStep(state.guideStep - 1);
   if (event.key.toLowerCase() === "x") dom.xrayTool.click();
   if (event.key.toLowerCase() === "c") setSectionEnabled(!state.sectionEnabled);
   if (event.key.toLowerCase() === "n") setAnnotationsEnabled(!state.annotations);
+  if (event.key.toLowerCase() === "a") {
+    if (state.assembly) exitAssemblyMode({ restore: true, announce: true });
+    else startAssemblyMode();
+  }
   if (event.key.toLowerCase() === "r") resetExperience();
-  if (event.key === " ") {
+  if (event.key === " " && !state.assembly) {
     event.preventDefault();
     setGuidePlaying(!state.guidePlaying);
   }
   if (event.key === "Escape" && state.challenge) exitChallenge();
+  if (event.key === "Escape" && state.assembly) exitAssemblyMode({ restore: true });
 });
 
 window.addEventListener("resize", resize);
@@ -1372,6 +1702,7 @@ function animate(frameTime = performance.now(), xrFrame = null) {
     applyExplosion(state.targetExplosion);
   }
   activeModel.update?.(delta);
+  updateAssemblyAnimation(frameTime);
   if (state.arMode && state.arSpin) assembly.rotation.y += delta * 0.42;
   arTracking.update(xrFrame);
   updateSectionPlane();

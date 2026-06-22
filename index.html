@@ -109,6 +109,9 @@
             <button class="tool-button active" id="annotations-tool" type="button" data-tooltip="Toggle spatial annotations" aria-label="Toggle spatial annotations">
               <span>ⓘ</span><small>Notes</small>
             </button>
+            <button class="tool-button" id="assembly-tool" type="button" data-tooltip="Rebuild the product" aria-label="Start assembly mode">
+              <span>◇</span><small>Assemble</small>
+            </button>
             <button class="tool-button" id="reset-tool" type="button" data-tooltip="Reset view" aria-label="Reset view">
               <span>↺</span><small>Reset</small>
             </button>
@@ -131,6 +134,26 @@
               <small id="challenge-progress">Step 1 of 5 · Select the correct component</small>
             </div>
             <button id="exit-challenge" type="button">Exit challenge</button>
+          </div>
+
+          <div class="assembly-overlay" id="assembly-overlay" aria-live="polite">
+            <div class="assembly-main">
+              <span class="assembly-badge">ASSEMBLY MODE</span>
+              <strong id="assembly-prompt">Install the highlighted component</strong>
+              <small id="assembly-detail">Tap the matching separated part to snap it into its ghost position.</small>
+              <div class="assembly-progress-track" aria-hidden="true">
+                <i id="assembly-progress-bar"></i>
+              </div>
+            </div>
+            <div class="assembly-metrics">
+              <span><b id="assembly-step">0 / 10</b><small>installed</small></span>
+              <span><b id="assembly-time">00:00</b><small>time</small></span>
+              <span><b id="assembly-score">1500</b><small>score</small></span>
+            </div>
+            <div class="assembly-actions">
+              <button id="assembly-hint" type="button">Show hint</button>
+              <button id="exit-assembly" type="button">Exit</button>
+            </div>
           </div>
 
           <div class="section-control" id="section-control" aria-label="Cross-section controls">
@@ -264,6 +287,26 @@
       </div>
 
       <div class="ar-control-dock">
+        <div class="ar-assembly-panel" id="ar-assembly-panel" aria-live="polite">
+          <div>
+            <span class="assembly-badge">ASSEMBLY MODE</span>
+            <strong id="ar-assembly-prompt">Install the highlighted component</strong>
+            <small id="ar-assembly-detail">Tap the matching part or choose it in the inspector.</small>
+            <div class="assembly-progress-track" aria-hidden="true">
+              <i id="ar-assembly-progress-bar"></i>
+            </div>
+          </div>
+          <div class="assembly-metrics">
+            <span><b id="ar-assembly-step">0 / 10</b><small>installed</small></span>
+            <span><b id="ar-assembly-time">00:00</b><small>time</small></span>
+            <span><b id="ar-assembly-score">1500</b><small>score</small></span>
+          </div>
+          <div class="assembly-actions">
+            <button id="ar-assembly-hint" type="button">Show hint</button>
+            <button id="ar-exit-assembly" type="button">Exit</button>
+          </div>
+        </div>
+
         <div class="ar-studio-controls" id="ar-studio-controls">
           <div class="ar-transform-controls">
             <span class="ar-control-label">Transform</span>
@@ -304,6 +347,7 @@
               <button id="ar-guide-next" type="button" aria-label="Next assembly stage">Stage ›</button>
               <button id="ar-spin-button" type="button">Auto spin</button>
               <button id="ar-annotations-button" class="active" type="button">Notes on</button>
+              <button id="ar-assembly-button" type="button">Assembly</button>
             </div>
             <small id="ar-guide-info">Stage 1 of 6 · System overview</small>
             <small id="ar-component-info">Select a part to highlight it and read its role.</small>
