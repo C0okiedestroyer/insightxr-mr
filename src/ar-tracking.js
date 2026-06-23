@@ -15,6 +15,7 @@ export class ARTrackingController {
     onStatus,
     onEnd,
     onOcclusion,
+    onSelect,
   }) {
     this.renderer = renderer;
     this.scene = scene;
@@ -24,6 +25,7 @@ export class ARTrackingController {
     this.onStatus = onStatus;
     this.onEnd = onEnd;
     this.onOcclusion = onOcclusion;
+    this.onSelect = onSelect;
     this.mode = null;
     this.session = null;
     this.hitTestSource = null;
@@ -66,6 +68,7 @@ export class ARTrackingController {
     this.resizeHandler = () => this.resizeMarkerView();
     this.xrSessionEndHandler = () => this.scheduleXRSessionCleanup();
     this.sessionEndFallbackHandler = () => this.scheduleXRSessionCleanup();
+    this.controllerSelectHandler = () => this.handleControllerSelect();
 
     this.reticle = new THREE.Mesh(
       new THREE.RingGeometry(0.075, 0.095, 48).rotateX(-Math.PI / 2),
@@ -156,7 +159,8 @@ export class ARTrackingController {
     this.hitTestSource = await this.session.requestHitTestSource({ space: viewerSpace });
 
     this.controller = this.renderer.xr.getController(0);
-    this.controller.addEventListener("select", () => this.placeAtReticle());
+    this.controller.removeEventListener("select", this.controllerSelectHandler);
+    this.controller.addEventListener("select", this.controllerSelectHandler);
     this.scene.add(this.controller);
     const depthRequested = this.session.enabledFeatures?.includes?.("depth-sensing");
     if (!depthRequested) {
@@ -384,6 +388,16 @@ export class ARTrackingController {
         // The local XR reference space still keeps the placement world-relative.
       }
     }
+  }
+
+  handleControllerSelect() {
+    if (this.mode !== "surface") return;
+    if (!this.placed) {
+      void this.placeAtReticle();
+      return;
+    }
+    this.controller?.updateMatrixWorld?.(true);
+    this.onSelect?.(this.controller);
   }
 
   applyPoseToAnchor(matrix) {
@@ -626,7 +640,10 @@ export class ARTrackingController {
       this.scene.add(this.stage);
     }
     this.scene.remove(this.surfaceAnchorRoot);
-    if (this.controller) this.scene.remove(this.controller);
+    if (this.controller) {
+      this.controller.removeEventListener("select", this.controllerSelectHandler);
+      this.scene.remove(this.controller);
+    }
     this.controller = null;
     this.session = null;
     this.reticle.visible = false;

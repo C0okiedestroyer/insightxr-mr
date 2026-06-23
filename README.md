@@ -126,8 +126,8 @@ For marker recognition:
 | Open detailed controls on a phone | **Controls** |
 | Slice through the assembly | **Section**, then choose Side/Height/Depth and move the slider. Height reveals the model from top to bottom |
 | Let real objects hide virtual parts | **Occlusion on/off** when WebXR depth is available |
-| Rebuild the product | **Assembly** in Model inspector; tap parts in the validated order |
-| Leave tracked mode | **Exit AR** |
+| Rebuild the product | **Assembly** in Model inspector; aim at separated parts and tap them in the validated order |
+| Leave tracked mode | **Exit AR** returns through a clean Studio page load for reliable mobile renderer recovery |
 
 ## Studio controls
 

@@ -21,6 +21,15 @@ import {
   formatAssemblyTime,
 } from "./assembly.js";
 
+const currentPageUrl = new URL(window.location.href);
+if (currentPageUrl.searchParams.has("arReturn")) {
+  currentPageUrl.searchParams.delete("arReturn");
+  window.history.replaceState(null, "", currentPageUrl);
+}
+const returnedModelId = window.sessionStorage.getItem("insightxr-return-model");
+window.sessionStorage.removeItem("insightxr-return-model");
+const initialModelId = MODEL_IDS.includes(returnedModelId) ? returnedModelId : "aerocore";
+
 const dom = {
   viewport: document.querySelector("#viewport"),
   modelSelect: document.querySelector("#model-select"),
@@ -178,7 +187,7 @@ const state = {
   occlusionEnabled: true,
   challenge: null,
   removedParts: new Set(),
-  modelId: "aerocore",
+  modelId: initialModelId,
   isolateSelected: false,
   arSpin: false,
   sectionEnabled: false,
@@ -263,6 +272,7 @@ const arTracking = new ARTrackingController({
   onStatus: updateARStatus,
   onEnd: restoreStudioAfterAR,
   onOcclusion: updateOcclusionStatus,
+  onSelect: handleARSelect,
 });
 
 const raycaster = new THREE.Raycaster();
@@ -270,6 +280,9 @@ const pointer = new THREE.Vector2();
 const labelBounds = new THREE.Box3();
 const labelElements = new Map();
 const labelWorldPosition = new THREE.Vector3();
+const labelWorldOffset = new THREE.Vector3();
+const labelWorldScale = new THREE.Vector3();
+const labelWorldQuaternion = new THREE.Quaternion();
 const labelCameraPosition = new THREE.Vector3();
 const labelCameraDirection = new THREE.Vector3();
 const labelToPart = new THREE.Vector3();
@@ -310,10 +323,13 @@ const sectionHelperOutline = new THREE.LineSegments(
 sectionHelperSurface.renderOrder = 30;
 sectionHelperOutline.renderOrder = 31;
 sectionHelper.add(sectionHelperSurface, sectionHelperOutline);
+const labelLayerHome = dom.labelLayer.parentElement;
+const annotationLayerHome = dom.annotationLayer.parentElement;
 let assemblyGhost = null;
 let lastAssemblyHudUpdate = 0;
 let pointerDown = null;
 let draggingPlacement = false;
+let studioReloadRequested = false;
 
 function activeComponents() {
   return activeDefinition.components;
@@ -1254,6 +1270,7 @@ function prepareTrackedAR(mode) {
   dom.replaceAnchorLabel.textContent = mode === "surface" ? "Re-place" : "Move marker";
   document.body.classList.add("tracked-ar-active");
   document.body.classList.toggle("marker-ar-active", mode === "marker");
+  dom.arOverlay.append(dom.labelLayer, dom.annotationLayer);
   dom.arDialog.classList.remove("visible");
   dom.arOverlay.classList.add("visible");
   dom.cameraMode.classList.add("active");
@@ -1357,7 +1374,11 @@ function updateARStatus(status, detail) {
   document.body.dataset.arStatus = status;
 }
 
-function restoreStudioAfterAR() {
+function restoreStudioAfterAR(mode) {
+  if (mode === "surface") {
+    reloadIntoStudio();
+    return;
+  }
   if (!state.arMode && !document.body.classList.contains("tracked-ar-active")) return;
   state.arMode = null;
   state.arStarting = false;
@@ -1368,6 +1389,8 @@ function restoreStudioAfterAR() {
   updateOcclusionStatus();
   document.body.classList.remove("tracked-ar-active", "marker-ar-active");
   delete document.body.dataset.arStatus;
+  labelLayerHome.appendChild(dom.labelLayer);
+  annotationLayerHome.appendChild(dom.annotationLayer);
   dom.arOverlay.classList.remove("visible");
   dom.cameraMode.classList.remove("active");
   dom.cameraMode.setAttribute("aria-pressed", "false");
@@ -1393,10 +1416,24 @@ function restoreStudioAfterAR() {
   resize();
 }
 
+function reloadIntoStudio() {
+  if (studioReloadRequested) return;
+  studioReloadRequested = true;
+  window.sessionStorage.setItem("insightxr-return-model", state.modelId);
+  const returnUrl = new URL(window.location.href);
+  returnUrl.searchParams.set("arReturn", Date.now().toString());
+  window.location.replace(returnUrl);
+}
+
 async function exitTrackedAR() {
   if (!state.arMode || state.arEnding) return;
   state.arEnding = true;
   dom.exitArButton.disabled = true;
+  if (state.arMode === "surface") {
+    dom.exitArButton.textContent = "Returning…";
+    reloadIntoStudio();
+    return;
+  }
   dom.exitArButton.textContent = "Ending…";
   try {
     await arTracking.stop();
@@ -1577,7 +1614,12 @@ function updateLabels() {
     }
 
     labelBounds.setFromObject(part).getCenter(labelWorldPosition);
-    labelWorldPosition.add(part.userData.labelOffset);
+    part.getWorldScale(labelWorldScale);
+    part.getWorldQuaternion(labelWorldQuaternion);
+    labelWorldOffset.copy(part.userData.labelOffset)
+      .multiply(labelWorldScale)
+      .applyQuaternion(labelWorldQuaternion);
+    labelWorldPosition.add(labelWorldOffset);
     labelToPart.copy(labelWorldPosition).sub(labelCameraPosition).normalize();
     if (labelCameraDirection.dot(labelToPart) < 0) {
       element.classList.remove("visible");
@@ -1622,6 +1664,26 @@ function raycastPart(event) {
   raycaster.setFromCamera(pointer, camera);
   const intersections = raycaster.intersectObjects([...parts.values()], true);
   return intersections.find((hit) => hit.object.userData.partId)?.object.userData.partId ?? null;
+}
+
+function raycastXRPart(controller) {
+  if (!controller) return null;
+  controller.updateMatrixWorld(true);
+  raycaster.setFromXRController(controller);
+  const intersections = raycaster.intersectObjects([...parts.values()], true);
+  return intersections.find((hit) => hit.object.userData.partId)?.object.userData.partId ?? null;
+}
+
+function handleARSelect(controller) {
+  if (state.arMode !== "surface") return;
+  const partId = raycastXRPart(controller);
+  if (partId) {
+    selectPart(partId);
+    return;
+  }
+  if (state.assembly) {
+    showToast("Aim at a separated component, then tap the screen.");
+  }
 }
 
 renderer.domElement.addEventListener("pointerdown", (event) => {
@@ -1805,7 +1867,7 @@ window.addEventListener("keydown", (event) => {
 
 window.addEventListener("resize", resize);
 window.addEventListener("beforeunload", () => {
-  void arTracking.stop().catch(() => {});
+  if (arTracking.mode === "marker") void arTracking.stop().catch(() => {});
 });
 
 createModelSelectors();

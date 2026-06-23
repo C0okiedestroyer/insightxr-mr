@@ -92,6 +92,28 @@ test("raw XR session end still restores the studio when the renderer event is mi
   assert.equal(controller.mode, null);
 });
 
+test("surface select places first, then forwards taps for part picking", async () => {
+  const selectedControllers = [];
+  const { controller } = createController();
+  const xrController = new THREE.Group();
+  controller.controller = xrController;
+  controller.onSelect = (selectedController) => selectedControllers.push(selectedController);
+  controller.mode = "surface";
+  let placements = 0;
+  controller.placeAtReticle = async () => {
+    placements += 1;
+    controller.placed = true;
+  };
+
+  controller.handleControllerSelect();
+  await Promise.resolve();
+  assert.equal(placements, 1);
+  assert.equal(selectedControllers.length, 0);
+
+  controller.handleControllerSelect();
+  assert.deepEqual(selectedControllers, [xrController]);
+});
+
 test("environmental occlusion can pause and resume the WebXR depth mesh", () => {
   const updates = [];
   const { controller, renderer } = createController();
