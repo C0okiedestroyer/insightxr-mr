@@ -184,7 +184,7 @@ const state = {
   arControlsExpanded: false,
   occlusionStatus: "unavailable",
   occlusionAvailable: false,
-  occlusionEnabled: true,
+  occlusionEnabled: false,
   occlusionSource: null,
   challenge: null,
   removedParts: new Set(),
@@ -1252,7 +1252,7 @@ function prepareTrackedAR(mode) {
   setARControlsExpanded(false);
   updateOcclusionStatus({
     available: false,
-    enabled: true,
+    enabled: false,
     status: mode === "surface" ? "checking" : "unavailable",
   });
   setGuidePlaying(false);
@@ -1308,7 +1308,7 @@ async function startTrackedAR(mode) {
 
 function updateOcclusionStatus({
   available = false,
-  enabled = true,
+  enabled = false,
   status = "unavailable",
   source = null,
 } = {}) {
@@ -1325,7 +1325,9 @@ function updateOcclusionStatus({
     unavailable: "No depth",
   };
   dom.arOcclusionButton.textContent = labels[status] ?? "Occlusion";
-  dom.arOcclusionButton.disabled = status === "checking" || status === "initializing";
+  dom.arOcclusionButton.disabled = status === "checking"
+    || status === "initializing"
+    || status === "active";
   dom.arOcclusionButton.classList.toggle("active", available && enabled);
   dom.arOcclusionButton.title = available
     ? `Real objects hide virtual geometry using ${source === "cpu-optimized" ? "ARCore CPU depth" : "GPU depth"}.`

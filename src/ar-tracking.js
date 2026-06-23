@@ -46,7 +46,7 @@ export class ARTrackingController {
     this.resolveSurfaceEnd = null;
     this.xrCleanupScheduled = false;
     this.occlusionAvailable = false;
-    this.occlusionEnabled = true;
+    this.occlusionEnabled = false;
     this.occlusionStatus = "unavailable";
     this.depthUsage = null;
     this.depthDataFormat = null;
@@ -108,11 +108,11 @@ export class ARTrackingController {
     this.ending = false;
     this.cleanupComplete = false;
     this.occlusionAvailable = false;
-    this.occlusionEnabled = true;
+    this.occlusionEnabled = false;
     this.occlusionStatus = "checking";
     this.onOcclusion?.({
       available: false,
-      enabled: true,
+      enabled: false,
       status: "checking",
     });
     this.placed = false;
@@ -532,14 +532,12 @@ export class ARTrackingController {
 
   toggleOcclusion() {
     if (!this.occlusionAvailable) return false;
-    this.occlusionEnabled = !this.occlusionEnabled;
+    if (this.occlusionEnabled) return true;
+    this.occlusionEnabled = true;
     const mesh = this.renderer.xr.getDepthSensingMesh?.();
-    if (mesh) mesh.visible = this.occlusionEnabled;
-    this.cpuDepthOcclusion.setEnabled(this.occlusionEnabled);
-    this.setOcclusionStatus(
-      this.occlusionEnabled ? "active" : "paused",
-      true,
-    );
+    if (mesh) mesh.visible = true;
+    this.cpuDepthOcclusion.setEnabled(true);
+    this.setOcclusionStatus("active", true);
     return true;
   }
 
@@ -687,14 +685,14 @@ export class ARTrackingController {
     this.placed = false;
     this.ending = false;
     this.occlusionAvailable = false;
-    this.occlusionEnabled = true;
+    this.occlusionEnabled = false;
     this.occlusionStatus = "unavailable";
     this.depthUsage = null;
     this.depthDataFormat = null;
     this.cpuDepthOcclusion.reset();
     this.onOcclusion?.({
       available: false,
-      enabled: true,
+      enabled: false,
       status: "unavailable",
       source: null,
     });

@@ -114,7 +114,7 @@ test("surface select places first, then forwards taps for part picking", async (
   assert.deepEqual(selectedControllers, [xrController]);
 });
 
-test("environmental occlusion can pause and resume the WebXR depth mesh", () => {
+test("environmental occlusion starts off and can only be enabled once", () => {
   const updates = [];
   const { controller, renderer } = createController();
   const depthMesh = { visible: true };
@@ -125,19 +125,19 @@ test("environmental occlusion can pause and resume the WebXR depth mesh", () => 
 
   controller.updateOcclusion();
   assert.equal(controller.occlusionAvailable, true);
-  assert.equal(controller.occlusionStatus, "active");
-  assert.equal(depthMesh.visible, true);
-
-  assert.equal(controller.toggleOcclusion(), true);
   assert.equal(controller.occlusionStatus, "paused");
   assert.equal(depthMesh.visible, false);
 
   assert.equal(controller.toggleOcclusion(), true);
   assert.equal(controller.occlusionStatus, "active");
   assert.equal(depthMesh.visible, true);
+
+  assert.equal(controller.toggleOcclusion(), true);
+  assert.equal(controller.occlusionStatus, "active");
+  assert.equal(depthMesh.visible, true);
   assert.deepEqual(
     updates.map(({ status }) => status),
-    ["active", "paused", "active"],
+    ["paused", "active"],
   );
 });
 
@@ -168,8 +168,12 @@ test("Chrome-compatible CPU depth activates environmental occlusion", () => {
 
   controller.updateOcclusion(frame, {});
 
-  assert.equal(controller.cpuDepthOcclusion.mesh.visible, true);
+  assert.equal(controller.cpuDepthOcclusion.mesh.visible, false);
   assert.equal(controller.occlusionAvailable, true);
-  assert.equal(controller.occlusionStatus, "active");
+  assert.equal(controller.occlusionStatus, "paused");
   assert.equal(updates.at(-1).source, "cpu-optimized");
+
+  controller.toggleOcclusion();
+  assert.equal(controller.cpuDepthOcclusion.mesh.visible, true);
+  assert.equal(controller.occlusionStatus, "active");
 });
