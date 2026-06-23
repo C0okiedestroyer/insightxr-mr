@@ -5,6 +5,7 @@ import {
   clampSectionProgress,
   sectionCoordinate,
   sectionDisplayPercent,
+  sectionNormalSign,
 } from "../src/cross-section.js";
 
 test("cross-section progress remains normalized", () => {
@@ -30,6 +31,18 @@ test("height cross-section travels from top to bottom", () => {
   );
   assert.equal(sectionCoordinate(bounds, "y", 0, 0), 3);
   assert.equal(sectionCoordinate(bounds, "y", 1, 0), -1);
+});
+
+test("height cross-section clips the material above the descending plane", () => {
+  const coordinate = 1;
+  const normal = new THREE.Vector3(0, sectionNormalSign("y"), 0);
+  const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(
+    normal,
+    new THREE.Vector3(0, coordinate, 0),
+  );
+
+  assert.ok(plane.distanceToPoint(new THREE.Vector3(0, 2, 0)) < 0);
+  assert.ok(plane.distanceToPoint(new THREE.Vector3(0, 0, 0)) > 0);
 });
 
 test("cross-section percentage is rounded for the interface", () => {

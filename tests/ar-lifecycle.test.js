@@ -56,16 +56,38 @@ test("repeated exit requests end one WebXR session", async () => {
   controller.surfaceEndPromise = new Promise((resolve) => {
     controller.resolveSurfaceEnd = resolve;
   });
-  controller.session = {
-    async end() {
-      ended += 1;
-      xr.dispatchEvent({ type: "sessionend" });
-    },
+  controller.session = new THREE.EventDispatcher();
+  controller.session.end = async () => {
+    ended += 1;
+    xr.dispatchEvent({ type: "sessionend" });
+    controller.session.dispatchEvent({ type: "end" });
   };
   xr.addEventListener("sessionend", controller.xrSessionEndHandler);
+  controller.session.addEventListener("end", controller.sessionEndFallbackHandler);
 
   await Promise.all([controller.stop(), controller.stop()]);
   assert.equal(ended, 1);
+  assert.equal(restored, 1);
+  assert.equal(controller.mode, null);
+});
+
+test("raw XR session end still restores the studio when the renderer event is missed", async () => {
+  let restored = 0;
+  const { controller } = createController(() => {
+    restored += 1;
+  });
+  controller.cleanupComplete = false;
+  controller.mode = "surface";
+  const ended = new Promise((resolve) => {
+    controller.resolveSurfaceEnd = resolve;
+  });
+  controller.surfaceEndPromise = ended;
+  controller.session = new THREE.EventDispatcher();
+  controller.session.addEventListener("end", controller.sessionEndFallbackHandler);
+
+  controller.session.dispatchEvent({ type: "end" });
+  await ended;
+
   assert.equal(restored, 1);
   assert.equal(controller.mode, null);
 });

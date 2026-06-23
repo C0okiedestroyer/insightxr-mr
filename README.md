@@ -116,7 +116,7 @@ For marker recognition:
 | Move to a new surface | **Re-place** |
 | Change product at the same anchor | Model selector |
 | Inspect component | **Inspect component** selector |
-| Show or hide attached technical callout | **Notes on/off** |
+| Show or hide part tags and the selected part's technical callout | **Tags on/off** |
 | Display only one component | **Isolate** |
 | Restore complete assembly | **Show all** |
 | Advance assembly lesson | **Stage** buttons |

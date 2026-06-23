@@ -2203,6 +2203,25 @@ body.tracked-ar-active .annotation-facts em {
   color: rgba(255, 255, 255, 0.88);
 }
 
+body.tracked-ar-active #label-layer {
+  z-index: 149;
+}
+
+body.tracked-ar-active .part-label {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(8, 32, 41, 0.82);
+  color: white;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
+}
+
+body.tracked-ar-active .part-label.visible {
+  opacity: 0.94;
+}
+
+body.tracked-ar-active .part-label span {
+  color: rgba(255, 255, 255, 0.58);
+}
+
 body.tracked-ar-active #app {
   position: fixed;
   inset: 0;
@@ -2219,8 +2238,7 @@ body.tracked-ar-active .assembly-overlay,
 body.tracked-ar-active .section-control,
 body.tracked-ar-active .explosion-control,
 body.tracked-ar-active .challenge-overlay,
-body.tracked-ar-active .scan-lines,
-body.tracked-ar-active #label-layer {
+body.tracked-ar-active .scan-lines {
   display: none !important;
 }
 
@@ -2572,6 +2590,17 @@ body.marker-ar-active #viewport canvas {
   .spatial-annotation {
     width: min(230px, calc(100vw - 16px));
     padding: 9px 10px;
+  }
+
+  body.tracked-ar-active .part-label {
+    max-width: 112px;
+    padding: 4px 6px 4px 4px;
+  }
+
+  body.tracked-ar-active .part-label b {
+    overflow: hidden;
+    font-size: 8px;
+    text-overflow: ellipsis;
   }
 
   .spatial-annotation h3 {

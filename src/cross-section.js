@@ -21,6 +21,10 @@ export function sectionCoordinate(bounds, axis, progress, paddingRatio = 0.03) {
   return min - padding + (size + padding * 2) * directionalProgress;
 }
 
+export function sectionNormalSign(axis) {
+  return axis === "y" ? -1 : 1;
+}
+
 export function sectionDisplayPercent(progress) {
   return `${Math.round(clampSectionProgress(progress) * 100)}%`;
 }

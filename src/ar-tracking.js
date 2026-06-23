@@ -41,6 +41,7 @@ export class ARTrackingController {
     this.cleanupComplete = true;
     this.surfaceEndPromise = null;
     this.resolveSurfaceEnd = null;
+    this.xrCleanupScheduled = false;
     this.occlusionAvailable = false;
     this.occlusionEnabled = true;
     this.occlusionStatus = "unavailable";
@@ -63,7 +64,8 @@ export class ARTrackingController {
     this.markerPoseFilter = new MarkerPoseFilter();
     this.defaultPixelRatio = Math.min(window.devicePixelRatio, 2);
     this.resizeHandler = () => this.resizeMarkerView();
-    this.xrSessionEndHandler = () => this.handleXRSessionEnd();
+    this.xrSessionEndHandler = () => this.scheduleXRSessionCleanup();
+    this.sessionEndFallbackHandler = () => this.scheduleXRSessionCleanup();
 
     this.reticle = new THREE.Mesh(
       new THREE.RingGeometry(0.075, 0.095, 48).rotateX(-Math.PI / 2),
@@ -149,6 +151,7 @@ export class ARTrackingController {
       this.handleXRSessionEnd();
       throw error;
     }
+    this.session.addEventListener("end", this.sessionEndFallbackHandler);
     const viewerSpace = await this.session.requestReferenceSpace("viewer");
     this.hitTestSource = await this.session.requestHitTestSource({ space: viewerSpace });
 
@@ -539,9 +542,10 @@ export class ARTrackingController {
     if (this.mode === "surface") {
       if (this.ending) return this.surfaceEndPromise;
       this.ending = true;
+      const endingPromise = this.surfaceEndPromise;
       if (!this.session) {
-        this.handleXRSessionEnd();
-        return this.surfaceEndPromise;
+        this.scheduleXRSessionCleanup();
+        return endingPromise;
       }
       try {
         await this.session.end();
@@ -550,9 +554,9 @@ export class ARTrackingController {
           this.ending = false;
           throw error;
         }
-        this.handleXRSessionEnd();
+        this.scheduleXRSessionCleanup();
       }
-      return this.surfaceEndPromise;
+      return endingPromise;
     }
     if (this.mode === "marker") {
       if (this.ending) return;
@@ -592,6 +596,7 @@ export class ARTrackingController {
 
   handleXRSessionEnd() {
     this.renderer.xr.removeEventListener("sessionend", this.xrSessionEndHandler);
+    this.session?.removeEventListener?.("end", this.sessionEndFallbackHandler);
     const finished = this.finishSession();
     this.resolveSurfaceEnd?.();
     this.resolveSurfaceEnd = null;
@@ -599,9 +604,19 @@ export class ARTrackingController {
     if (finished) this.onEnd?.("surface");
   }
 
+  scheduleXRSessionCleanup() {
+    if (this.xrCleanupScheduled || this.cleanupComplete) return;
+    this.xrCleanupScheduled = true;
+    queueMicrotask(() => {
+      this.xrCleanupScheduled = false;
+      this.handleXRSessionEnd();
+    });
+  }
+
   finishSession() {
     if (this.cleanupComplete) return false;
     this.cleanupComplete = true;
+    this.xrCleanupScheduled = false;
     this.hitTestSource?.cancel?.();
     this.hitTestSource = null;
     this.anchor?.delete?.();

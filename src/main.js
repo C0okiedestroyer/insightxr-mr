@@ -11,6 +11,7 @@ import {
   clampSectionProgress,
   sectionCoordinate,
   sectionDisplayPercent,
+  sectionNormalSign,
 } from "./cross-section.js";
 import {
   assemblyProgress,
@@ -87,6 +88,7 @@ const dom = {
   markerArButton: document.querySelector("#marker-ar-button"),
   surfaceSupport: document.querySelector("#surface-support"),
   arOverlay: document.querySelector("#tracked-ar-overlay"),
+  arTopControls: document.querySelector(".ar-top-controls"),
   arControlDock: document.querySelector(".ar-control-dock"),
   arControlsToggle: document.querySelector("#ar-controls-toggle"),
   arOcclusionButton: document.querySelector("#ar-occlusion-button"),
@@ -267,6 +269,10 @@ const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 const labelBounds = new THREE.Box3();
 const labelElements = new Map();
+const labelWorldPosition = new THREE.Vector3();
+const labelCameraPosition = new THREE.Vector3();
+const labelCameraDirection = new THREE.Vector3();
+const labelToPart = new THREE.Vector3();
 const annotationWorldPosition = new THREE.Vector3();
 const sectionBounds = new THREE.Box3();
 const sectionBoundsSize = new THREE.Vector3();
@@ -661,7 +667,7 @@ function updateSectionPlane() {
   updateSectionHelper();
   assembly.updateWorldMatrix(true, true);
   sectionLocalNormal.set(0, 0, 0);
-  sectionLocalNormal[state.sectionAxis] = 1;
+  sectionLocalNormal[state.sectionAxis] = sectionNormalSign(state.sectionAxis);
   sectionWorldNormal.copy(sectionLocalNormal).transformDirection(assembly.matrixWorld);
   sectionLocalPoint.copy(sectionHelper.position);
   sectionWorldPoint.copy(sectionLocalPoint).applyMatrix4(assembly.matrixWorld);
@@ -979,8 +985,17 @@ function setAnnotationsEnabled(enabled) {
   state.annotations = enabled;
   dom.annotationsTool.classList.toggle("active", enabled);
   dom.arAnnotationsButton.classList.toggle("active", enabled);
-  dom.arAnnotationsButton.textContent = enabled ? "Notes on" : "Notes off";
+  dom.arAnnotationsButton.textContent = enabled ? "Tags on" : "Tags off";
   if (!enabled) dom.annotationLayer.classList.remove("visible");
+}
+
+function setARTagsEnabled(enabled) {
+  state.labels = enabled;
+  dom.labelsTool.classList.toggle("active", enabled);
+  setAnnotationsEnabled(enabled);
+  if (!enabled) {
+    labelElements.forEach((label) => label.classList.remove("visible"));
+  }
 }
 
 function selectPart(partId, fromUI = false) {
@@ -1228,7 +1243,7 @@ function prepareTrackedAR(mode) {
   selectPart(null);
   controls.enabled = false;
   controls.autoRotate = false;
-  state.labels = false;
+  setARTagsEnabled(true);
   modelStage.position.set(0, 0, 0);
   modelStage.quaternion.identity();
   modelStage.scale.setScalar(1);
@@ -1370,6 +1385,7 @@ function restoreStudioAfterAR() {
   ground.visible = true;
   grid.visible = true;
   state.labels = true;
+  setAnnotationsEnabled(true);
   controls.enabled = true;
   controls.target.set(0, 0, 0);
   controls.update();
@@ -1528,39 +1544,60 @@ function exitChallenge() {
 }
 
 function updateLabels() {
-  const width = dom.viewport.clientWidth;
-  const height = dom.viewport.clientHeight;
-  const canvasRect = dom.viewport.getBoundingClientRect();
-  const cameraDirection = new THREE.Vector3();
-  camera.getWorldDirection(cameraDirection);
+  const canvasRect = renderer.domElement.getBoundingClientRect();
+  const width = canvasRect.width;
+  const height = canvasRect.height;
+  const projectionCamera = arTracking.getProjectionCamera();
+  projectionCamera.getWorldDirection(labelCameraDirection);
+  projectionCamera.getWorldPosition(labelCameraPosition);
+  const surfaceReady = state.arMode !== "surface" || document.body.dataset.arStatus === "anchored";
+  const markerReady = state.arMode !== "marker" || document.body.dataset.arStatus === "marker-found";
+  const topBoundary = state.arMode
+    ? Math.max(canvasRect.top + 8, dom.arTopControls.getBoundingClientRect().bottom + 6)
+    : canvasRect.top + 62;
+  const bottomBoundary = state.arMode
+    ? Math.min(canvasRect.bottom - 8, dom.arControlDock.getBoundingClientRect().top - 6)
+    : canvasRect.bottom - 112;
 
   labelElements.forEach((element, id) => {
     const part = parts.get(id);
     const definition = part.userData.definition;
     const matchesCategory = state.category === "All" || definition.category === state.category;
     const matchesSearch = `${definition.name} ${definition.category}`.toLowerCase().includes(state.search.toLowerCase());
-    const visible = state.labels && matchesCategory && matchesSearch && !state.removedParts.has(id) && state.explosion > 0.12;
+    const revealLabels = state.arMode ? surfaceReady && markerReady : state.explosion > 0.12;
+    const visible = state.labels
+      && revealLabels
+      && matchesCategory
+      && matchesSearch
+      && !state.removedParts.has(id)
+      && objectIsWorldVisible(part);
     if (!visible) {
       element.classList.remove("visible");
       return;
     }
 
-    const position = new THREE.Vector3();
-    labelBounds.setFromObject(part).getCenter(position);
-    position.add(part.userData.labelOffset);
-    const toPart = position.clone().sub(camera.position).normalize();
-    if (cameraDirection.dot(toPart) < 0) {
+    labelBounds.setFromObject(part).getCenter(labelWorldPosition);
+    labelWorldPosition.add(part.userData.labelOffset);
+    labelToPart.copy(labelWorldPosition).sub(labelCameraPosition).normalize();
+    if (labelCameraDirection.dot(labelToPart) < 0) {
       element.classList.remove("visible");
       return;
     }
-    position.project(camera);
-    const x = (position.x * 0.5 + 0.5) * width;
-    const y = (-position.y * 0.5 + 0.5) * height;
-    if (x < 12 || x > width - 145 || y < 62 || y > height - 112) {
+    labelWorldPosition.project(projectionCamera);
+    const x = canvasRect.left + (labelWorldPosition.x * 0.5 + 0.5) * width;
+    const y = canvasRect.top + (-labelWorldPosition.y * 0.5 + 0.5) * height;
+    if (
+      labelWorldPosition.z < -1
+      || labelWorldPosition.z > 1
+      || x < canvasRect.left + 8
+      || x > canvasRect.right - 118
+      || y < topBoundary
+      || y > bottomBoundary
+    ) {
       element.classList.remove("visible");
       return;
     }
-    element.style.transform = `translate(${canvasRect.left + x}px, ${canvasRect.top + y}px)`;
+    element.style.transform = `translate(${x}px, ${y}px)`;
     element.classList.add("visible");
   });
 }
@@ -1665,7 +1702,7 @@ dom.arShowAllButton.addEventListener("click", showAllParts);
 dom.arGuidePrevious.addEventListener("click", () => setGuideStep(state.guideStep - 1));
 dom.arGuideNext.addEventListener("click", () => setGuideStep(state.guideStep + 1));
 dom.arSpinButton.addEventListener("click", toggleARSpin);
-dom.arAnnotationsButton.addEventListener("click", () => setAnnotationsEnabled(!state.annotations));
+dom.arAnnotationsButton.addEventListener("click", () => setARTagsEnabled(!state.labels));
 dom.arAssemblyButton.addEventListener("click", () => {
   if (state.assembly) exitAssemblyMode({ restore: true, announce: true });
   else startAssemblyMode();
@@ -1790,10 +1827,8 @@ function animate(frameTime = performance.now(), xrFrame = null) {
   if (state.arMode && state.arSpin) assembly.rotation.y += delta * 0.42;
   arTracking.update(xrFrame);
   updateSectionPlane();
-  if (!state.arMode) {
-    controls.update();
-    updateLabels();
-  }
+  if (!state.arMode) controls.update();
+  updateLabels();
   updateSpatialAnnotation();
   renderer.render(scene, arTracking.getRenderCamera());
 }
