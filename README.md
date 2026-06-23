@@ -202,7 +202,7 @@ pnpm preview
 ## Browser notes
 
 - Markerless mode depends on the browser exposing `immersive-ar`, WebXR hit testing, and DOM overlay.
-- Environmental occlusion additionally depends on WebXR GPU depth sensing. The control displays **No depth** and remains disabled when the phone or browser does not provide it.
+- Environmental occlusion supports Chrome/ARCore's `cpu-optimized` WebXR depth path and browsers that expose GPU depth. The control displays **No depth** when the browser does not expose the optional WebXR feature. Update Chrome and Google Play Services for AR first; Chrome builds that keep experimental WebXR features behind a flag may require `chrome://flags/#webxr-incubations`.
 - Marker preview requires the marker to remain visible and does not provide spatial persistence.
 - iPhone/iPad browser support for immersive WebXR is not assumed. Marker preview can still demonstrate the model, but equivalent world tracking would require a supported WebXR browser or a native ARKit build.
 - No camera frames are uploaded by InsightXR.

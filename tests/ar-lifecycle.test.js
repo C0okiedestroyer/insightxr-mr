@@ -140,3 +140,36 @@ test("environmental occlusion can pause and resume the WebXR depth mesh", () => 
     ["active", "paused", "active"],
   );
 });
+
+test("Chrome-compatible CPU depth activates environmental occlusion", () => {
+  const updates = [];
+  const { controller } = createController();
+  controller.mode = "surface";
+  controller.depthUsage = "cpu-optimized";
+  controller.depthDataFormat = "luminance-alpha";
+  controller.onOcclusion = (status) => updates.push(status);
+  const raw = new Uint16Array([1000, 1200, 800, 1500]);
+  const frame = {
+    getViewerPose() {
+      return { views: [{}] };
+    },
+    getDepthInformation() {
+      return {
+        width: 2,
+        height: 2,
+        data: raw.buffer,
+        rawValueToMeters: 0.001,
+        normDepthBufferFromNormView: {
+          matrix: new THREE.Matrix4().elements,
+        },
+      };
+    },
+  };
+
+  controller.updateOcclusion(frame, {});
+
+  assert.equal(controller.cpuDepthOcclusion.mesh.visible, true);
+  assert.equal(controller.occlusionAvailable, true);
+  assert.equal(controller.occlusionStatus, "active");
+  assert.equal(updates.at(-1).source, "cpu-optimized");
+});

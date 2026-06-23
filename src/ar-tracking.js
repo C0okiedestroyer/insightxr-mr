@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { MarkerPoseFilter } from "./marker-pose-filter.js";
+import { CPUDepthOcclusion } from "./cpu-depth-occlusion.js";
 
 const CAMERA_PARAMETERS =
   "data:application/octet-stream;base64,AAACgAAAAeBAgwrsW6bUSwAAAAAAAAAAQHQ3KqAAAAAAAAAAAAAAAAAAAAAAAAAAQIL0K3dHyf9AbbNowAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/wAAAAAAAAAAAAAAAAAAA/uWNa4AAAAL+3lTLAAAAAv17YFWAAAAA/VYLXIAAAAECCe0YgAAAAQIJlMOAAAABAdDcqoAAAAEBts2jAAAAAP+8OmzqkDy4=";
@@ -47,6 +48,9 @@ export class ARTrackingController {
     this.occlusionAvailable = false;
     this.occlusionEnabled = true;
     this.occlusionStatus = "unavailable";
+    this.depthUsage = null;
+    this.depthDataFormat = null;
+    this.cpuDepthOcclusion = new CPUDepthOcclusion(scene);
     this.surfaceModelScale = 0.14;
     this.markerModelScale = 0.22;
     this.objectScale = 1;
@@ -132,8 +136,8 @@ export class ARTrackingController {
       optionalFeatures: ["anchors", "light-estimation", "depth-sensing"],
       domOverlay: { root: overlay },
       depthSensing: {
-        usagePreference: ["gpu-optimized"],
-        dataFormatPreference: ["float32", "luminance-alpha"],
+        usagePreference: ["cpu-optimized", "gpu-optimized"],
+        dataFormatPreference: ["luminance-alpha", "float32"],
       },
     });
 
@@ -155,6 +159,13 @@ export class ARTrackingController {
       throw error;
     }
     this.session.addEventListener("end", this.sessionEndFallbackHandler);
+    try {
+      this.depthUsage = this.session.depthUsage;
+      this.depthDataFormat = this.session.depthDataFormat;
+    } catch {
+      this.depthUsage = null;
+      this.depthDataFormat = null;
+    }
     const viewerSpace = await this.session.requestReferenceSpace("viewer");
     this.hitTestSource = await this.session.requestHitTestSource({ space: viewerSpace });
 
@@ -162,8 +173,12 @@ export class ARTrackingController {
     this.controller.removeEventListener("select", this.controllerSelectHandler);
     this.controller.addEventListener("select", this.controllerSelectHandler);
     this.scene.add(this.controller);
-    const depthRequested = this.session.enabledFeatures?.includes?.("depth-sensing");
-    if (!depthRequested) {
+    if (this.depthUsage === "cpu-optimized") {
+      this.setOcclusionStatus("initializing", true);
+    } else if (
+      this.depthUsage !== "gpu-optimized"
+      && !this.session.enabledFeatures?.includes?.("depth-sensing")
+    ) {
       this.setOcclusionStatus("unavailable", false);
     }
     this.onStatus?.("scanning", "Move your phone slowly to find a horizontal surface.");
@@ -277,7 +292,7 @@ export class ARTrackingController {
   updateSurface(frame) {
     const referenceSpace = this.renderer.xr.getReferenceSpace();
     if (!referenceSpace) return;
-    this.updateOcclusion();
+    this.updateOcclusion(frame, referenceSpace);
 
     if (this.anchorSpace) {
       const anchorPose = frame.getPose(this.anchorSpace, referenceSpace);
@@ -475,13 +490,15 @@ export class ARTrackingController {
       available,
       enabled: this.occlusionEnabled,
       status,
+      source: available ? this.depthUsage : null,
     });
   }
 
-  updateOcclusion() {
+  updateOcclusion(frame, referenceSpace) {
     if (this.mode !== "surface") return;
-    const available = Boolean(this.renderer.xr.hasDepthSensing?.());
-    if (available) {
+    const gpuAvailable = Boolean(this.renderer.xr.hasDepthSensing?.());
+    if (gpuAvailable) {
+      this.cpuDepthOcclusion.setEnabled(false);
       const mesh = this.renderer.xr.getDepthSensingMesh?.();
       if (mesh) mesh.visible = this.occlusionEnabled;
       this.setOcclusionStatus(
@@ -490,8 +507,26 @@ export class ARTrackingController {
       );
       return;
     }
-    if (this.session?.enabledFeatures?.includes?.("depth-sensing")) {
-      this.setOcclusionStatus("initializing", false);
+
+    if (this.depthUsage === "cpu-optimized") {
+      const active = this.cpuDepthOcclusion.update(
+        frame,
+        referenceSpace,
+        this.depthDataFormat,
+      );
+      this.cpuDepthOcclusion.setEnabled(active && this.occlusionEnabled);
+      this.setOcclusionStatus(
+        active
+          ? this.occlusionEnabled ? "active" : "paused"
+          : "initializing",
+        true,
+      );
+      return;
+    }
+
+    this.cpuDepthOcclusion.setEnabled(false);
+    if (this.depthUsage === "gpu-optimized") {
+      this.setOcclusionStatus("initializing", true);
     }
   }
 
@@ -500,6 +535,7 @@ export class ARTrackingController {
     this.occlusionEnabled = !this.occlusionEnabled;
     const mesh = this.renderer.xr.getDepthSensingMesh?.();
     if (mesh) mesh.visible = this.occlusionEnabled;
+    this.cpuDepthOcclusion.setEnabled(this.occlusionEnabled);
     this.setOcclusionStatus(
       this.occlusionEnabled ? "active" : "paused",
       true,
@@ -653,10 +689,14 @@ export class ARTrackingController {
     this.occlusionAvailable = false;
     this.occlusionEnabled = true;
     this.occlusionStatus = "unavailable";
+    this.depthUsage = null;
+    this.depthDataFormat = null;
+    this.cpuDepthOcclusion.reset();
     this.onOcclusion?.({
       available: false,
       enabled: true,
       status: "unavailable",
+      source: null,
     });
     this.renderer.xr.enabled = false;
     return true;

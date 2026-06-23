@@ -185,6 +185,7 @@ const state = {
   occlusionStatus: "unavailable",
   occlusionAvailable: false,
   occlusionEnabled: true,
+  occlusionSource: null,
   challenge: null,
   removedParts: new Set(),
   modelId: initialModelId,
@@ -1309,11 +1310,13 @@ function updateOcclusionStatus({
   available = false,
   enabled = true,
   status = "unavailable",
+  source = null,
 } = {}) {
   const previousStatus = state.occlusionStatus;
   state.occlusionAvailable = available;
   state.occlusionEnabled = enabled;
   state.occlusionStatus = status;
+  state.occlusionSource = source;
   const labels = {
     checking: "Occlusion…",
     initializing: "Depth starting",
@@ -1322,19 +1325,25 @@ function updateOcclusionStatus({
     unavailable: "No depth",
   };
   dom.arOcclusionButton.textContent = labels[status] ?? "Occlusion";
-  dom.arOcclusionButton.disabled = !available;
+  dom.arOcclusionButton.disabled = status === "checking" || status === "initializing";
   dom.arOcclusionButton.classList.toggle("active", available && enabled);
   dom.arOcclusionButton.title = available
-    ? "Real objects can hide virtual geometry using phone depth sensing."
-    : "This phone/browser does not provide WebXR depth sensing.";
+    ? `Real objects hide virtual geometry using ${source === "cpu-optimized" ? "ARCore CPU depth" : "GPU depth"}.`
+    : "WebXR depth was not exposed. On Chrome Android, update Chrome and Google Play Services for AR; experimental releases may also require chrome://flags/#webxr-incubations.";
   if (status === "active" && previousStatus !== "active") {
-    showToast("Environmental occlusion is active.", "success");
+    showToast(
+      `${source === "cpu-optimized" ? "ARCore CPU" : "GPU"} depth occlusion is active.`,
+      "success",
+    );
   }
 }
 
 function toggleOcclusion() {
   if (!arTracking.toggleOcclusion()) {
-    showToast("Depth-based occlusion is unavailable on this phone/browser.", "error");
+    showToast(
+      "WebXR depth is unavailable. Update Chrome and Google Play Services for AR; if needed, enable chrome://flags/#webxr-incubations.",
+      "error",
+    );
   }
 }
 
