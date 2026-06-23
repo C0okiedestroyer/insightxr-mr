@@ -532,12 +532,14 @@ export class ARTrackingController {
 
   toggleOcclusion() {
     if (!this.occlusionAvailable) return false;
-    if (this.occlusionEnabled) return true;
-    this.occlusionEnabled = true;
+    this.occlusionEnabled = !this.occlusionEnabled;
     const mesh = this.renderer.xr.getDepthSensingMesh?.();
-    if (mesh) mesh.visible = true;
-    this.cpuDepthOcclusion.setEnabled(true);
-    this.setOcclusionStatus("active", true);
+    if (mesh) mesh.visible = this.occlusionEnabled;
+    this.cpuDepthOcclusion.setEnabled(this.occlusionEnabled);
+    this.setOcclusionStatus(
+      this.occlusionEnabled ? "active" : "paused",
+      true,
+    );
     return true;
   }
 

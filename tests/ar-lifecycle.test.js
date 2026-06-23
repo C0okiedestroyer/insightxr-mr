@@ -114,7 +114,7 @@ test("surface select places first, then forwards taps for part picking", async (
   assert.deepEqual(selectedControllers, [xrController]);
 });
 
-test("environmental occlusion starts off and can only be enabled once", () => {
+test("environmental occlusion starts off and remains optional", () => {
   const updates = [];
   const { controller, renderer } = createController();
   const depthMesh = { visible: true };
@@ -133,11 +133,11 @@ test("environmental occlusion starts off and can only be enabled once", () => {
   assert.equal(depthMesh.visible, true);
 
   assert.equal(controller.toggleOcclusion(), true);
-  assert.equal(controller.occlusionStatus, "active");
-  assert.equal(depthMesh.visible, true);
+  assert.equal(controller.occlusionStatus, "paused");
+  assert.equal(depthMesh.visible, false);
   assert.deepEqual(
     updates.map(({ status }) => status),
-    ["paused", "active"],
+    ["paused", "active", "paused"],
   );
 });
 

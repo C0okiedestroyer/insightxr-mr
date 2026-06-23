@@ -125,7 +125,7 @@ For marker recognition:
 | See through enclosure | **X-ray** |
 | Open detailed controls on a phone | **Controls** |
 | Slice through the assembly | **Section**, then choose Side/Height/Depth and move the slider. Height reveals the model from top to bottom |
-| Let real objects hide virtual parts | Press **Occlusion off** once to enable it; it starts disabled and stays enabled for the rest of that AR session |
+| Let real objects hide virtual parts | **Occlusion off/on**; it starts disabled and can be toggled at any time |
 | Rebuild the product | **Assembly** in Model inspector; aim at separated parts and tap them in the validated order |
 | Leave tracked mode | **Exit AR** returns through a clean Studio page load for reliable mobile renderer recovery |
 

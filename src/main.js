@@ -1326,8 +1326,7 @@ function updateOcclusionStatus({
   };
   dom.arOcclusionButton.textContent = labels[status] ?? "Occlusion";
   dom.arOcclusionButton.disabled = status === "checking"
-    || status === "initializing"
-    || status === "active";
+    || status === "initializing";
   dom.arOcclusionButton.classList.toggle("active", available && enabled);
   dom.arOcclusionButton.title = available
     ? `Real objects hide virtual geometry using ${source === "cpu-optimized" ? "ARCore CPU depth" : "GPU depth"}.`
