@@ -23,6 +23,15 @@ test("cross-section coordinate follows the selected model axis", () => {
   assert.equal(sectionCoordinate(bounds, "z", 0.5, 0), 1);
 });
 
+test("height cross-section travels from top to bottom", () => {
+  const bounds = new THREE.Box3(
+    new THREE.Vector3(-2, -1, -4),
+    new THREE.Vector3(2, 3, 6),
+  );
+  assert.equal(sectionCoordinate(bounds, "y", 0, 0), 3);
+  assert.equal(sectionCoordinate(bounds, "y", 1, 0), -1);
+});
+
 test("cross-section percentage is rounded for the interface", () => {
   assert.equal(sectionDisplayPercent(0.456), "46%");
 });

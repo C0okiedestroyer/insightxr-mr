@@ -2031,7 +2031,7 @@ body.marker-ar-active .ar-component-control {
 .ar-inspector-actions {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: repeat(7, minmax(42px, 1fr));
+  grid-template-columns: repeat(5, minmax(42px, 1fr));
   gap: 4px;
 }
 
@@ -2444,18 +2444,57 @@ body.marker-ar-active #viewport canvas {
   }
 
   .ar-bottom-controls {
-    grid-template-columns: 1fr 52px 52px 58px;
+    grid-template-columns: minmax(120px, 1fr) 48px 48px 54px;
+    gap: 5px;
   }
 
   .ar-bottom-controls button {
     min-width: 0;
-    padding-inline: 5px;
+    min-height: 46px;
+    padding: 4px;
+  }
+
+  .ar-bottom-controls button span {
+    margin-bottom: 0;
+    font-size: 14px;
+  }
+
+  .ar-bottom-controls button,
+  .ar-bottom-controls button b {
+    font-size: 7px;
+  }
+
+  .ar-explosion-control {
+    grid-template-columns: auto 1fr 28px;
+    gap: 6px;
+    min-width: 0;
+    padding: 7px 8px;
   }
 
   .ar-control-dock {
     right: 8px;
     bottom: max(8px, env(safe-area-inset-bottom));
     left: 8px;
+    gap: 5px;
+    max-height: calc(100dvh - 78px - env(safe-area-inset-bottom));
+  }
+
+  .ar-top-controls {
+    top: max(8px, env(safe-area-inset-top));
+    right: 8px;
+    left: 8px;
+  }
+
+  .ar-tracking-status {
+    padding: 7px 9px;
+  }
+
+  .ar-tracking-status small {
+    display: none;
+  }
+
+  .ar-top-controls button {
+    padding: 8px 10px;
   }
 
   .ar-section-panel {
@@ -2464,6 +2503,8 @@ body.marker-ar-active #viewport canvas {
 
   .ar-assembly-panel {
     grid-template-columns: 1fr auto;
+    max-height: 32dvh;
+    overflow-y: auto;
   }
 
   .ar-assembly-panel > div:first-child {
@@ -2479,11 +2520,29 @@ body.marker-ar-active #viewport canvas {
   }
 
   .ar-studio-controls {
+    display: none;
+    grid-template-columns: 1fr;
+    max-height: min(46dvh, 340px);
+    padding-right: 2px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+  }
+
+  .ar-control-dock.controls-expanded .ar-studio-controls {
+    display: grid;
+  }
+
+  body.marker-ar-active .ar-control-dock.controls-expanded .ar-studio-controls {
+    display: grid;
     grid-template-columns: 1fr;
   }
 
-  body.marker-ar-active .ar-studio-controls {
-    grid-template-columns: 1fr;
+  .ar-transform-controls,
+  .ar-position-controls,
+  .ar-component-control {
+    padding: 7px 8px;
+    border-radius: 10px;
   }
 
   .ar-component-control {
@@ -2502,7 +2561,12 @@ body.marker-ar-active #viewport canvas {
   }
 
   .ar-inspector-actions {
-    grid-template-columns: repeat(3, minmax(62px, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .ar-inspector-actions button {
+    min-height: 30px;
+    font-size: 7px;
   }
 
   .spatial-annotation {
@@ -2528,7 +2592,38 @@ body.marker-ar-active #viewport canvas {
   }
 
   .ar-position-controls {
-    grid-template-columns: 54px 1fr;
+    grid-template-columns: 46px 1fr;
+  }
+
+  .ar-position-grid {
+    grid-template-columns: repeat(6, minmax(25px, 1fr));
+  }
+
+  .ar-position-grid button,
+  .ar-transform-controls > button {
+    height: 31px;
+  }
+
+  .ar-inspector-selects {
+    grid-template-columns: 1fr 1.2fr;
+  }
+
+  .ar-component-control select {
+    height: 31px;
+  }
+}
+
+@media (max-height: 600px) and (max-width: 900px) {
+  .ar-control-dock {
+    max-height: calc(100dvh - 62px);
+  }
+
+  .ar-control-dock.controls-expanded .ar-studio-controls {
+    max-height: 42dvh;
+  }
+
+  .ar-assembly-panel {
+    max-height: 34dvh;
   }
 }
 

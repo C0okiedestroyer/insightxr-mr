@@ -4,10 +4,18 @@ import { MarkerPoseFilter } from "./marker-pose-filter.js";
 const CAMERA_PARAMETERS =
   "data:application/octet-stream;base64,AAACgAAAAeBAgwrsW6bUSwAAAAAAAAAAQHQ3KqAAAAAAAAAAAAAAAAAAAAAAAAAAQIL0K3dHyf9AbbNowAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/wAAAAAAAAAAAAAAAAAAA/uWNa4AAAAL+3lTLAAAAAv17YFWAAAAA/VYLXIAAAAECCe0YgAAAAQIJlMOAAAABAdDcqoAAAAEBts2jAAAAAP+8OmzqkDy4=";
 
-const HIRO_PATTERN = `${import.meta.env.BASE_URL}tracking/patt.hiro`;
+const HIRO_PATTERN = `${import.meta.env?.BASE_URL ?? "/"}tracking/patt.hiro`;
 
 export class ARTrackingController {
-  constructor({ renderer, scene, camera, stage, onStatus, onEnd }) {
+  constructor({
+    renderer,
+    scene,
+    camera,
+    stage,
+    onStatus,
+    onEnd,
+    onOcclusion,
+  }) {
     this.renderer = renderer;
     this.scene = scene;
     this.camera = camera;
@@ -15,6 +23,7 @@ export class ARTrackingController {
     this.stage = stage;
     this.onStatus = onStatus;
     this.onEnd = onEnd;
+    this.onOcclusion = onOcclusion;
     this.mode = null;
     this.session = null;
     this.hitTestSource = null;
@@ -28,6 +37,13 @@ export class ARTrackingController {
     this.stableMarkerRoot = null;
     this.markerVisible = false;
     this.placed = false;
+    this.ending = false;
+    this.cleanupComplete = true;
+    this.surfaceEndPromise = null;
+    this.resolveSurfaceEnd = null;
+    this.occlusionAvailable = false;
+    this.occlusionEnabled = true;
+    this.occlusionStatus = "unavailable";
     this.surfaceModelScale = 0.14;
     this.markerModelScale = 0.22;
     this.objectScale = 1;
@@ -47,6 +63,7 @@ export class ARTrackingController {
     this.markerPoseFilter = new MarkerPoseFilter();
     this.defaultPixelRatio = Math.min(window.devicePixelRatio, 2);
     this.resizeHandler = () => this.resizeMarkerView();
+    this.xrSessionEndHandler = () => this.handleXRSessionEnd();
 
     this.reticle = new THREE.Mesh(
       new THREE.RingGeometry(0.075, 0.095, 48).rotateX(-Math.PI / 2),
@@ -79,6 +96,16 @@ export class ARTrackingController {
     }
 
     this.mode = "surface";
+    this.ending = false;
+    this.cleanupComplete = false;
+    this.occlusionAvailable = false;
+    this.occlusionEnabled = true;
+    this.occlusionStatus = "checking";
+    this.onOcclusion?.({
+      available: false,
+      enabled: true,
+      status: "checking",
+    });
     this.placed = false;
     this.resetObjectTransform();
     this.scene.add(this.surfaceAnchorRoot);
@@ -97,27 +124,48 @@ export class ARTrackingController {
     const overlay = document.querySelector("#tracked-ar-overlay");
     this.session = await navigator.xr.requestSession("immersive-ar", {
       requiredFeatures: ["hit-test", "dom-overlay"],
-      optionalFeatures: ["anchors", "light-estimation"],
+      optionalFeatures: ["anchors", "light-estimation", "depth-sensing"],
       domOverlay: { root: overlay },
+      depthSensing: {
+        usagePreference: ["gpu-optimized"],
+        dataFormatPreference: ["float32", "luminance-alpha"],
+      },
     });
 
-    this.session.addEventListener("end", () => {
-      this.finishSession();
-      this.onEnd?.("surface");
-    }, { once: true });
-
-    await this.renderer.xr.setSession(this.session);
+    this.surfaceEndPromise = new Promise((resolve) => {
+      this.resolveSurfaceEnd = resolve;
+    });
+    this.renderer.xr.removeEventListener("sessionend", this.xrSessionEndHandler);
+    this.renderer.xr.addEventListener("sessionend", this.xrSessionEndHandler);
+    try {
+      await this.renderer.xr.setSession(this.session);
+    } catch (error) {
+      this.renderer.xr.removeEventListener("sessionend", this.xrSessionEndHandler);
+      try {
+        await this.session.end();
+      } catch {
+        // The session may already have ended while renderer setup failed.
+      }
+      this.handleXRSessionEnd();
+      throw error;
+    }
     const viewerSpace = await this.session.requestReferenceSpace("viewer");
     this.hitTestSource = await this.session.requestHitTestSource({ space: viewerSpace });
 
     this.controller = this.renderer.xr.getController(0);
     this.controller.addEventListener("select", () => this.placeAtReticle());
     this.scene.add(this.controller);
+    const depthRequested = this.session.enabledFeatures?.includes?.("depth-sensing");
+    if (!depthRequested) {
+      this.setOcclusionStatus("unavailable", false);
+    }
     this.onStatus?.("scanning", "Move your phone slowly to find a horizontal surface.");
   }
 
   async startMarker() {
     this.mode = "marker";
+    this.ending = false;
+    this.cleanupComplete = false;
     this.placed = true;
     this.reticle.visible = false;
     this.renderer.xr.enabled = false;
@@ -222,6 +270,7 @@ export class ARTrackingController {
   updateSurface(frame) {
     const referenceSpace = this.renderer.xr.getReferenceSpace();
     if (!referenceSpace) return;
+    this.updateOcclusion();
 
     if (this.anchorSpace) {
       const anchorPose = frame.getPose(this.anchorSpace, referenceSpace);
@@ -401,6 +450,46 @@ export class ARTrackingController {
     }
   }
 
+  setOcclusionStatus(status, available = this.occlusionAvailable) {
+    if (this.occlusionStatus === status && this.occlusionAvailable === available) return;
+    this.occlusionStatus = status;
+    this.occlusionAvailable = available;
+    this.onOcclusion?.({
+      available,
+      enabled: this.occlusionEnabled,
+      status,
+    });
+  }
+
+  updateOcclusion() {
+    if (this.mode !== "surface") return;
+    const available = Boolean(this.renderer.xr.hasDepthSensing?.());
+    if (available) {
+      const mesh = this.renderer.xr.getDepthSensingMesh?.();
+      if (mesh) mesh.visible = this.occlusionEnabled;
+      this.setOcclusionStatus(
+        this.occlusionEnabled ? "active" : "paused",
+        true,
+      );
+      return;
+    }
+    if (this.session?.enabledFeatures?.includes?.("depth-sensing")) {
+      this.setOcclusionStatus("initializing", false);
+    }
+  }
+
+  toggleOcclusion() {
+    if (!this.occlusionAvailable) return false;
+    this.occlusionEnabled = !this.occlusionEnabled;
+    const mesh = this.renderer.xr.getDepthSensingMesh?.();
+    if (mesh) mesh.visible = this.occlusionEnabled;
+    this.setOcclusionStatus(
+      this.occlusionEnabled ? "active" : "paused",
+      true,
+    );
+    return true;
+  }
+
   resizeMarkerView() {
     if (!this.source?.ready) return;
     const video = this.source.domElement;
@@ -448,17 +537,28 @@ export class ARTrackingController {
 
   async stop() {
     if (this.mode === "surface") {
-      if (this.session) {
-        await this.session.end();
-      } else {
-        this.finishSession();
-        this.onEnd?.("surface");
+      if (this.ending) return this.surfaceEndPromise;
+      this.ending = true;
+      if (!this.session) {
+        this.handleXRSessionEnd();
+        return this.surfaceEndPromise;
       }
-      return;
+      try {
+        await this.session.end();
+      } catch (error) {
+        if (this.renderer.xr.isPresenting) {
+          this.ending = false;
+          throw error;
+        }
+        this.handleXRSessionEnd();
+      }
+      return this.surfaceEndPromise;
     }
     if (this.mode === "marker") {
+      if (this.ending) return;
+      this.ending = true;
       this.stopMarker();
-      this.onEnd?.("marker");
+      if (this.finishSession()) this.onEnd?.("marker");
     }
   }
 
@@ -488,10 +588,20 @@ export class ARTrackingController {
     this.markerStartedAt = 0;
     this.markerPoseFilter.reset();
     this.renderer.setPixelRatio(this.defaultPixelRatio);
-    this.finishSession();
+  }
+
+  handleXRSessionEnd() {
+    this.renderer.xr.removeEventListener("sessionend", this.xrSessionEndHandler);
+    const finished = this.finishSession();
+    this.resolveSurfaceEnd?.();
+    this.resolveSurfaceEnd = null;
+    this.surfaceEndPromise = null;
+    if (finished) this.onEnd?.("surface");
   }
 
   finishSession() {
+    if (this.cleanupComplete) return false;
+    this.cleanupComplete = true;
     this.hitTestSource?.cancel?.();
     this.hitTestSource = null;
     this.anchor?.delete?.();
@@ -507,6 +617,16 @@ export class ARTrackingController {
     this.reticle.visible = false;
     this.mode = null;
     this.placed = false;
+    this.ending = false;
+    this.occlusionAvailable = false;
+    this.occlusionEnabled = true;
+    this.occlusionStatus = "unavailable";
+    this.onOcclusion?.({
+      available: false,
+      enabled: true,
+      status: "unavailable",
+    });
     this.renderer.xr.enabled = false;
+    return true;
   }
 }

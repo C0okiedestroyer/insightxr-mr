@@ -23,6 +23,9 @@ All included learning models are generated entirely in code, so there are no pro
 - Isolate a selected component, restore all parts, step through assembly stages, and auto-spin
 - Spatial component annotations with live leader lines, safety badges, key metrics, and service notes
 - Validated Assembly Mode with ghost targets, snap animations, hints, timing, mistakes, and scoring
+- Top-down height cross-sections that match the usual overhead inspection angle
+- Environmental occlusion on phones that expose WebXR depth sensing
+- Compact, collapsible phone controls and safe single-flight AR shutdown
 - Safe-maintenance challenge
 
 ## Run on a computer
@@ -120,7 +123,9 @@ For marker recognition:
 | Rotate continuously | **Auto spin** |
 | Explode assembly | Bottom AR slider |
 | See through enclosure | **X-ray** |
-| Slice through the assembly | **Section**, then choose Side/Height/Depth and move the slider |
+| Open detailed controls on a phone | **Controls** |
+| Slice through the assembly | **Section**, then choose Side/Height/Depth and move the slider. Height reveals the model from top to bottom |
+| Let real objects hide virtual parts | **Occlusion on/off** when WebXR depth is available |
 | Rebuild the product | **Assembly** in Model inspector; tap parts in the validated order |
 | Leave tracked mode | **Exit AR** |
 
@@ -197,6 +202,7 @@ pnpm preview
 ## Browser notes
 
 - Markerless mode depends on the browser exposing `immersive-ar`, WebXR hit testing, and DOM overlay.
+- Environmental occlusion additionally depends on WebXR GPU depth sensing. The control displays **No depth** and remains disabled when the phone or browser does not provide it.
 - Marker preview requires the marker to remain visible and does not provide spatial persistence.
 - iPhone/iPad browser support for immersive WebXR is not assumed. Marker preview can still demonstrate the model, but equivalent world tracking would require a supported WebXR browser or a native ARKit build.
 - No camera frames are uploaded by InsightXR.

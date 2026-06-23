@@ -14,7 +14,11 @@ export function sectionCoordinate(bounds, axis, progress, paddingRatio = 0.03) {
   const max = bounds.max.getComponent(definition.index);
   const size = Math.max(max - min, 0.001);
   const padding = size * paddingRatio;
-  return min - padding + (size + padding * 2) * clampSectionProgress(progress);
+  const normalizedProgress = clampSectionProgress(progress);
+  const directionalProgress = axis === "y"
+    ? 1 - normalizedProgress
+    : normalizedProgress;
+  return min - padding + (size + padding * 2) * directionalProgress;
 }
 
 export function sectionDisplayPercent(progress) {

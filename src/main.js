@@ -88,6 +88,8 @@ const dom = {
   surfaceSupport: document.querySelector("#surface-support"),
   arOverlay: document.querySelector("#tracked-ar-overlay"),
   arControlDock: document.querySelector(".ar-control-dock"),
+  arControlsToggle: document.querySelector("#ar-controls-toggle"),
+  arOcclusionButton: document.querySelector("#ar-occlusion-button"),
   arStatusTitle: document.querySelector("#ar-status-title"),
   arStatusDetail: document.querySelector("#ar-status-detail"),
   placementGuide: document.querySelector("#ar-placement-guide"),
@@ -167,6 +169,11 @@ const state = {
   guideTimer: null,
   arMode: null,
   arStarting: false,
+  arEnding: false,
+  arControlsExpanded: false,
+  occlusionStatus: "unavailable",
+  occlusionAvailable: false,
+  occlusionEnabled: true,
   challenge: null,
   removedParts: new Set(),
   modelId: "aerocore",
@@ -253,6 +260,7 @@ const arTracking = new ARTrackingController({
   stage: modelStage,
   onStatus: updateARStatus,
   onEnd: restoreStudioAfterAR,
+  onOcclusion: updateOcclusionStatus,
 });
 
 const raycaster = new THREE.Raycaster();
@@ -1194,9 +1202,27 @@ function closeAROptions() {
   dom.arDialog.classList.remove("visible");
 }
 
+function setARControlsExpanded(expanded) {
+  state.arControlsExpanded = Boolean(expanded);
+  dom.arControlDock.classList.toggle("controls-expanded", state.arControlsExpanded);
+  dom.arControlsToggle.classList.toggle("active", state.arControlsExpanded);
+  dom.arControlsToggle.setAttribute("aria-expanded", String(state.arControlsExpanded));
+  const label = dom.arControlsToggle.querySelector("b");
+  if (label) label.textContent = state.arControlsExpanded ? "Hide" : "Controls";
+}
+
 function prepareTrackedAR(mode) {
   state.arMode = mode;
   state.arStarting = true;
+  state.arEnding = false;
+  dom.exitArButton.disabled = false;
+  dom.exitArButton.textContent = "Exit AR";
+  setARControlsExpanded(false);
+  updateOcclusionStatus({
+    available: false,
+    enabled: true,
+    status: mode === "surface" ? "checking" : "unavailable",
+  });
   setGuidePlaying(false);
   exitChallenge();
   selectPart(null);
@@ -1247,6 +1273,39 @@ async function startTrackedAR(mode) {
   }
 }
 
+function updateOcclusionStatus({
+  available = false,
+  enabled = true,
+  status = "unavailable",
+} = {}) {
+  const previousStatus = state.occlusionStatus;
+  state.occlusionAvailable = available;
+  state.occlusionEnabled = enabled;
+  state.occlusionStatus = status;
+  const labels = {
+    checking: "Occlusion…",
+    initializing: "Depth starting",
+    active: "Occlusion on",
+    paused: "Occlusion off",
+    unavailable: "No depth",
+  };
+  dom.arOcclusionButton.textContent = labels[status] ?? "Occlusion";
+  dom.arOcclusionButton.disabled = !available;
+  dom.arOcclusionButton.classList.toggle("active", available && enabled);
+  dom.arOcclusionButton.title = available
+    ? "Real objects can hide virtual geometry using phone depth sensing."
+    : "This phone/browser does not provide WebXR depth sensing.";
+  if (status === "active" && previousStatus !== "active") {
+    showToast("Environmental occlusion is active.", "success");
+  }
+}
+
+function toggleOcclusion() {
+  if (!arTracking.toggleOcclusion()) {
+    showToast("Depth-based occlusion is unavailable on this phone/browser.", "error");
+  }
+}
+
 function updateARStatus(status, detail) {
   const statusTitles = {
     scanning: "Scanning the room…",
@@ -1284,8 +1343,14 @@ function updateARStatus(status, detail) {
 }
 
 function restoreStudioAfterAR() {
+  if (!state.arMode && !document.body.classList.contains("tracked-ar-active")) return;
   state.arMode = null;
   state.arStarting = false;
+  state.arEnding = false;
+  dom.exitArButton.disabled = false;
+  dom.exitArButton.textContent = "Exit AR";
+  setARControlsExpanded(false);
+  updateOcclusionStatus();
   document.body.classList.remove("tracked-ar-active", "marker-ar-active");
   delete document.body.dataset.arStatus;
   dom.arOverlay.classList.remove("visible");
@@ -1312,9 +1377,24 @@ function restoreStudioAfterAR() {
   resize();
 }
 
+async function exitTrackedAR() {
+  if (!state.arMode || state.arEnding) return;
+  state.arEnding = true;
+  dom.exitArButton.disabled = true;
+  dom.exitArButton.textContent = "Ending…";
+  try {
+    await arTracking.stop();
+  } catch (error) {
+    state.arEnding = false;
+    dom.exitArButton.disabled = false;
+    dom.exitArButton.textContent = "Exit AR";
+    showToast(error?.message || "AR could not be closed cleanly.", "error");
+  }
+}
+
 async function enableStudioMode() {
   closeAROptions();
-  if (state.arMode) await arTracking.stop();
+  if (state.arMode) await exitTrackedAR();
 }
 
 function setInteractionMode(mode) {
@@ -1549,8 +1629,12 @@ dom.arDialog.addEventListener("click", (event) => {
 });
 dom.surfaceArButton.addEventListener("click", () => startTrackedAR("surface"));
 dom.markerArButton.addEventListener("click", () => startTrackedAR("marker"));
-dom.exitArButton.addEventListener("click", () => arTracking.stop());
+dom.exitArButton.addEventListener("click", exitTrackedAR);
 dom.replaceAnchorButton.addEventListener("click", () => arTracking.replace());
+dom.arControlsToggle.addEventListener("click", () => {
+  setARControlsExpanded(!state.arControlsExpanded);
+});
+dom.arOcclusionButton.addEventListener("click", toggleOcclusion);
 dom.arRotateLeft.addEventListener("click", () => arTracking.rotateObject(-Math.PI / 12));
 dom.arRotateRight.addEventListener("click", () => arTracking.rotateObject(Math.PI / 12));
 dom.arScaleSlider.addEventListener("input", (event) => {
@@ -1684,7 +1768,7 @@ window.addEventListener("keydown", (event) => {
 
 window.addEventListener("resize", resize);
 window.addEventListener("beforeunload", () => {
-  arTracking.stop();
+  void arTracking.stop().catch(() => {});
 });
 
 createModelSelectors();
